@@ -223,7 +223,7 @@ object RequirementHandlers {
         val info = buildList {
             add("状态" to statusBadge(r.statusEnum))
             add("优先级" to priorityBadge(r.priorityEnum))
-            add("期望交付" to (r.wantedText?.let { """<span class="wanted-chip${if (r.isOverdue) " is-overdue" else ""}"><i class="bi bi-calendar-event" aria-hidden="true"></i>${e(it)}</span>""" + lateMark(r) } ?: """<span class="text-secondary">未填</span>"""))
+            add("期望交付" to wantedBadge(r, full = true).ifEmpty { """<span class="text-secondary">未填</span>""" })
             add("创建" to e(formatStamp(r.createdAt)))
             add("最后更新" to e(formatStamp(r.updatedAt)))
             if (r.statusEnum == ReqStatus.ARCHIVED && r.closedAt != null) add("归档时间" to e(formatStamp(r.closedAt)))

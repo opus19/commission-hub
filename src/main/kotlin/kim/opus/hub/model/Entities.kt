@@ -45,7 +45,6 @@ data class Requirement(
 ) {
     val statusEnum: ReqStatus get() = ReqStatus.of(status)
     val priorityEnum: Priority get() = Priority.of(priority)
-    val wantedText: String? get() = Wanted.full(wantedAt)
     val isOverdue: Boolean get() = Wanted.overdue(wantedAt, statusEnum)
 }
 

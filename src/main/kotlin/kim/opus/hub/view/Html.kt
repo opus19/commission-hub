@@ -159,19 +159,17 @@ fun pagination(page: Int, pages: Int, href: (Int) -> String): String {
     return sb.toString()
 }
 
-fun lateMark(r: Requirement): String =
-    if (r.isOverdue) """<span class="wanted-late">已超期</span>""" else ""
-
-fun wantedTag(r: Requirement): String {
-    val text = Wanted.short(r.wantedAt) ?: return ""
-    return """<span class="d-inline-flex align-items-center wanted-tag${if (r.isOverdue) " is-overdue" else ""}"><i class="bi bi-calendar-event me-1"></i><span>期望交付 ${e(text)}</span>${lateMark(r)}</span>"""
+fun wantedBadge(r: Requirement, full: Boolean): String {
+    val date = (if (full) Wanted.full(r.wantedAt) else Wanted.short(r.wantedAt)) ?: return ""
+    val label = if (full) date else "期望交付 $date"
+    if (!r.isOverdue) return """<span class="wanted"><i class="bi bi-calendar-event" aria-hidden="true"></i>${e(label)}</span>"""
+    return """<span class="wanted is-overdue"><i class="bi bi-calendar-x" aria-hidden="true"></i>${e(label)}<span class="wanted-late">已超期</span></span>"""
 }
 
 fun reqItem(v: RequirementView): String {
     val r = v.requirement
     val meta = buildString {
-        append("""<span class="d-inline-flex align-items-center gap-2">${statusBadge(r.statusEnum)}${priorityBadge(r.priorityEnum)}</span>""")
-        append(wantedTag(r))
+        append("""<span class="d-inline-flex flex-wrap align-items-center gap-2">${statusBadge(r.statusEnum)}${priorityBadge(r.priorityEnum)}${wantedBadge(r, full = false)}</span>""")
         if (v.commentCount > 0) {
             append("""<span class="d-inline-flex align-items-center"><i class="bi bi-chat-left me-1"></i><span class="fw-medium">${v.commentCount}</span><span class="ms-1">条补充信息</span></span>""")
         }
