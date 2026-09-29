@@ -1,0 +1,13 @@
+.gradle/
+.kotlin/
+build/
+out/
+
+.idea/
+*.iml
+.cursor/
+.vscode/
+
+/data/
+config.properties
+*.log
