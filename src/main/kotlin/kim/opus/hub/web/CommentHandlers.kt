@@ -13,6 +13,7 @@ object CommentHandlers {
 
     fun section(ctx: Context, user: User, view: RequirementView, comments: List<Comment>): String {
         val r = view.requirement
+        val folded = CommentRepo.foldedIds(user.id, r.id)
         val visible = comments.filter { it.body.isNotBlank() || it.attachments.isNotEmpty() }
         val hiddenCount = if (visible.size > RECENT_MSG + 1) visible.size - RECENT_MSG else 0
         val older = visible.take(hiddenCount)
@@ -20,23 +21,23 @@ object CommentHandlers {
         val thread = if (visible.isEmpty()) """<p class="thread-empty">还没有补充信息</p>""" else buildString {
             if (older.isNotEmpty()) {
                 append("""<details class="thread-more"><summary><span class="thread-more-closed">展开更早的 ${older.size} 条</span><span class="thread-more-open">收起更早的</span></summary><div class="thread-list">""")
-                older.forEach { append(commentItem(ctx, user, view, it)) }
+                older.forEach { append(commentItem(ctx, user, view, it, it.id in folded)) }
                 append("</div></details>")
             }
             append("""<div class="thread-list">""")
-            recent.forEach { append(commentItem(ctx, user, view, it)) }
+            recent.forEach { append(commentItem(ctx, user, view, it, it.id in folded)) }
             append("</div>")
         }
         val tail = if (view.readOnly) "" else composer(ctx, r)
         return """
-<section class="thread mt-5" id="conversation" aria-labelledby="conversationTitle">
+<section class="thread mt-5" id="conversation" aria-labelledby="conversationTitle" data-csrf="${e(ctx.session().csrf)}">
   <h5 class="thread-title" id="conversationTitle">补充信息<span class="text-secondary fw-normal fs-6 ms-2">${visible.size} 条</span></h5>
   $thread
 </section>
 $tail"""
     }
 
-    private fun commentItem(ctx: Context, user: User, view: RequirementView, cm: Comment): String {
+    private fun commentItem(ctx: Context, user: User, view: RequirementView, cm: Comment, folded: Boolean): String {
         val canDelete = user.isAdmin && !view.readOnly
         val canEdit = cm.userId == user.id && !view.readOnly
         val (pictures, others) = cm.attachments.partition { imageType(it.originalName) != null }
@@ -44,8 +45,8 @@ $tail"""
             """<div class="tl-images">${pictures.joinToString("") { imageItem(ctx, canDelete, it) }}</div>"""
         val files = if (others.isEmpty()) "" else
             """<div class="tl-files">${others.joinToString("") { fileChip(ctx, canDelete, it) }}</div>"""
-        val edited = if (cm.editedAt == null) "" else
-            """<span class="tl-edited" title="编辑于 ${e(formatStamp(cm.editedAt))}">已编辑</span>"""
+        val foldText = if (folded) "展开" else "收起"
+        val fold = """<button class="tl-tool tl-fold" type="button" data-comment-fold="/comments/${cm.id}/fold" aria-expanded="${!folded}" title="$foldText" aria-label="${foldText}这条补充信息"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>"""
         val deleteNote = if (cm.attachments.isEmpty()) "删除这条补充信息？" else "删除这条补充信息？里面的 ${cm.attachments.size} 个附件也会一起删掉"
         val tools = if (!canEdit) "" else """
     <span class="tl-tools">
@@ -64,11 +65,11 @@ $tail"""
     </div>
   </form>"""
         return """
-<article class="tl-comment" id="c${cm.id}">
+<article class="tl-comment${if (folded) " is-folded" else ""}" id="c${cm.id}">
   <header class="tl-comment-head">
+    $fold
     <span class="fw-medium text-body">${e(cm.authorName)}</span>
     <span class="text-secondary">${timeTag(cm.createdAt)}</span>
-    $edited
     $tools
   </header>
   ${if (cm.body.isNotBlank()) """<div class="tl-comment-body fmt last-p text-break">${richText(cm.body, "")}</div>""" else ""}
@@ -152,6 +153,13 @@ $tail"""
         CommentRepo.delete(cm, user.id).forEach { Uploads.deleteQuietly(it) }
         ctx.flashOk("补充信息已删除")
         ctx.go("/requirements/${view.requirement.id}")
+    }
+
+    fun fold(ctx: Context) {
+        val user = ctx.user()
+        val (cm, _) = Access.comment(user, ctx.idParam())
+        CommentRepo.setFolded(user.id, cm.id, ctx.formParam("folded") == "1")
+        ctx.status(204)
     }
 
     fun image(ctx: Context) {

@@ -466,9 +466,52 @@
     return true;
   }
 
+  function foldLabel(btn, folded) {
+    var text = folded ? "展开" : "收起";
+    btn.setAttribute("aria-expanded", folded ? "false" : "true");
+    btn.setAttribute("title", text);
+    btn.setAttribute("aria-label", text + "这条补充信息");
+  }
+
+  function saveFold(btn) {
+    if (btn.dataset.saving === "1") {
+      btn.dataset.dirty = "1";
+      return;
+    }
+    var box = btn.closest("[data-csrf]");
+    var article = btn.closest(".tl-comment");
+    if (!box || !article) return;
+    btn.dataset.saving = "1";
+    btn.dataset.dirty = "";
+    var data = new URLSearchParams();
+    data.append("_csrf", box.getAttribute("data-csrf"));
+    data.append("folded", article.classList.contains("is-folded") ? "1" : "0");
+    var finish = function (ok) {
+      btn.dataset.saving = "";
+      if (!ok) toast("折叠状态没保存上，请稍后再试");
+      else if (btn.dataset.dirty === "1") saveFold(btn);
+    };
+    fetch(btn.getAttribute("data-comment-fold"), {
+      method: "POST",
+      body: data,
+      credentials: "same-origin",
+      cache: "no-store",
+      keepalive: true
+    }).then(function (res) { finish(res.status === 204); }, function () { finish(false); });
+  }
+
+  function setFold(article, folded) {
+    var btn = article.querySelector("[data-comment-fold]");
+    if (!btn || article.classList.contains("is-folded") === folded) return;
+    article.classList.toggle("is-folded", folded);
+    foldLabel(btn, folded);
+    saveFold(btn);
+  }
+
   function toggleEdit(article, on) {
     var form = article.querySelector(".tl-edit-form");
     if (!form) return;
+    if (on) setFold(article, false);
     var body = article.querySelector(".tl-comment-body");
     var tools = article.querySelector(".tl-tools");
     var pencil = article.querySelector("[data-comment-edit]");
@@ -490,6 +533,12 @@
   document.addEventListener("click", function (event) {
     var t = event.target;
     if (!(t instanceof Element)) return;
+    var fold = t.closest("[data-comment-fold]");
+    if (fold) {
+      var folding = fold.closest(".tl-comment");
+      if (folding) setFold(folding, !folding.classList.contains("is-folded"));
+      return;
+    }
     var edit = t.closest("[data-comment-edit]");
     var btn = edit || t.closest("[data-comment-cancel]");
     var article = btn ? btn.closest(".tl-comment") : null;

@@ -1393,9 +1393,14 @@ a[data-href]:not([class]):hover {
   border-radius: 6px 6px 0 0;
 }
 
-.tl-comment-head:last-child {
+.tl-comment-head:last-child,
+.tl-comment.is-folded > .tl-comment-head {
   border-bottom: 0;
   border-radius: 6px;
+}
+
+.tl-comment.is-folded > :not(.tl-comment-head) {
+  display: none;
 }
 
 .tl-comment-body {
@@ -1476,11 +1481,6 @@ a[data-href]:not([class]):hover {
   flex: 1 1 auto;
 }
 
-.tl-edited {
-  font-size: .75rem;
-  color: var(--vs-fg-muted);
-}
-
 .tl-tools {
   display: inline-flex;
   align-items: center;
@@ -1508,6 +1508,24 @@ a[data-href]:not([class]):hover {
 .tl-tool-danger:hover {
   color: #f48771;
   background: rgba(248, 81, 73, .12);
+}
+
+.tl-fold {
+  align-self: center;
+  margin: 0 -.25rem 0 -5px;
+}
+
+.tl-fold > .bi {
+  position: relative;
+  top: -1px;
+}
+
+.tl-fold > .bi::before {
+  transition: transform .15s ease;
+}
+
+.tl-comment:not(.is-folded) .tl-fold > .bi::before {
+  transform: rotate(90deg);
 }
 
 .tl-edit-form {
@@ -1807,7 +1825,8 @@ html.hub-loading body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .repo-card {
+  .repo-card,
+  .tl-fold > .bi::before {
     transition: none;
   }
 

@@ -59,6 +59,7 @@ object Routes {
         post("/requirements/{id}/versions") { ctx -> VersionHandlers.upload(ctx) }
         post("/comments/{id}") { ctx -> CommentHandlers.update(ctx) }
         post("/comments/{id}/delete") { ctx -> CommentHandlers.delete(ctx) }
+        post("/comments/{id}/fold") { ctx -> CommentHandlers.fold(ctx) }
 
         post("/versions/{id}/delete") { ctx -> VersionHandlers.delete(ctx) }
         r.get("/downloads/{id}") { ctx -> VersionHandlers.download(ctx) }

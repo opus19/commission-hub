@@ -26,6 +26,20 @@ object CommentRepo {
         stored
     }
 
+    fun foldedIds(userId: Long, requirementId: Long): Set<Long> = Db.read { c ->
+        c.rows(
+            "select f.comment_id from comment_folds f join comments cm on cm.id = f.comment_id where f.user_id = ? and cm.requirement_id = ?",
+            userId, requirementId
+        ) { rs -> rs.getLong(1) }.toSet()
+    }
+
+    fun setFolded(userId: Long, commentId: Long, folded: Boolean) {
+        Db.read { c ->
+            if (folded) c.exec("insert or ignore into comment_folds(user_id, comment_id) values(?, ?)", userId, commentId)
+            else c.exec("delete from comment_folds where user_id = ? and comment_id = ?", userId, commentId)
+        }
+    }
+
     fun forRequirement(requirementId: Long): List<Comment> = Db.read { c ->
         val comments = c.rows("$SELECT where cm.requirement_id = ? order by cm.id", requirementId, map = ::mapComment)
         if (comments.isEmpty()) return@read comments

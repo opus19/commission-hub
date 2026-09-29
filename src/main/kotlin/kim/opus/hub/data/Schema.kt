@@ -255,6 +255,14 @@ object Schema {
             order by v.id, a.id;
 
         alter table comments add column edited_at text
+        """,
+        13 to """
+        create table comment_folds (
+            user_id integer not null references users(id) on delete cascade,
+            comment_id integer not null references comments(id) on delete cascade,
+            primary key (user_id, comment_id)
+        );
+        create index ix_comment_folds_comment on comment_folds(comment_id)
         """
     )
 
