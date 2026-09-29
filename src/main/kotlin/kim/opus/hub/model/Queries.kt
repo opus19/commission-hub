@@ -6,7 +6,10 @@ object ReqTabs {
 
     fun emptyText(key: String): String = "没有" + label(key) + "的需求"
 
-    fun normalize(key: String?): String = if (key != null && key in keys) key else DEFAULT
+    fun defaultFor(counts: Map<String, Long>): String =
+        if ((counts["todo"] ?: 0L) == 0L && (counts["testing"] ?: 0L) > 0L) "testing" else DEFAULT
+
+    fun normalize(key: String?, fallback: String): String = if (key != null && key in keys) key else fallback
 
     fun label(key: String): String = when (key) {
         "testing" -> "待测试"

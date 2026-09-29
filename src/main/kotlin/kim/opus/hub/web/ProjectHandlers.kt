@@ -121,8 +121,7 @@ $modals"""
         val user = ctx.user()
         val project = Access.project(user, ctx.idParam())
         val base = "/projects/${project.id}"
-        val q = ListParams.parse(ctx, user, project.id)
-        val spec = ListParams.spec(base, "", q, ReqTabs.emptyText(q.tab))
+        val spec = ListParams.spec(base, "", ListParams.parse(ctx, user, project.id))
         val main = header(ctx, user, project) + listSection(spec)
         ctx.html(page(ctx, project.name, "projects", main, back = "/projects" to "项目"))
     }
