@@ -12,7 +12,7 @@ object AdminHandlers {
 
     private fun clientTarget(ctx: Context): User {
         val target = UserRepo.byId(ctx.idParam())
-        if (target == null || target.isAdmin) throw NotFoundResponse("账号不存在")
+        if (target == null || target.isAdmin || !target.active) throw NotFoundResponse("账号不存在")
         return target
     }
 
@@ -34,7 +34,7 @@ object AdminHandlers {
 
     fun userList(ctx: Context) {
         ctx.requireAdmin()
-        val clients = UserRepo.all().filter { !it.isAdmin }
+        val clients = UserRepo.clients()
         val projects = ProjectRepo.all()
         val memberships = MemberRepo.projectsByUser()
 
@@ -42,19 +42,15 @@ object AdminHandlers {
             val projectCell = memberships[u.id]?.takeIf { it.isNotEmpty() }?.joinToString("") { p ->
                 """<a class="project-chip" href="/projects/${p.id}">${e(p.name)}</a>"""
             } ?: """<span class="text-warning-emphasis">未分配项目</span>"""
-            val status = if (u.active) """<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">正常</span>"""
-            else """<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">已停用</span>"""
-            val nameCls = if (!u.active) " text-decoration-line-through text-secondary" else ""
             """
 <tr>
   <td>
     <div class="min-w-0">
-      <div class="text-truncate$nameCls">${e(u.displayName)}</div>
+      <div class="text-truncate">${e(u.displayName)}</div>
       <div class="small"><code>${e(u.username)}</code></div>
     </div>
   </td>
   <td><div class="d-flex flex-wrap gap-1">$projectCell</div></td>
-  <td>$status</td>
   <td class="small text-secondary text-nowrap">${e(formatStamp(u.createdAt))}</td>
   <td class="text-nowrap">${accountActions(ctx, u)}</td>
 </tr>"""
@@ -64,7 +60,7 @@ object AdminHandlers {
 <div class="card">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-      <thead><tr><th>账号</th><th>所属项目</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+      <thead><tr><th>账号</th><th>所属项目</th><th>创建时间</th><th>操作</th></tr></thead>
       <tbody>$rows</tbody>
     </table>
   </div>
@@ -101,11 +97,6 @@ $editModals"""
 
     private fun accountActions(ctx: Context, u: User): String {
         val name = e(u.username)
-        val toggle = if (u.active) {
-            """<button class="btn btn-sm btn-outline-danger" type="submit" aria-label="停用账号：$name"><i class="bi bi-slash-circle me-1"></i>停用</button>"""
-        } else {
-            """<button class="btn btn-sm btn-outline-success" type="submit" aria-label="启用账号：$name"><i class="bi bi-check-circle me-1"></i>启用</button>"""
-        }
         return """
 <div class="d-flex flex-nowrap align-items-center gap-2">
   <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#editUser${u.id}" aria-label="编辑账号：$name"><i class="bi bi-pencil me-1"></i>编辑</button>
@@ -113,10 +104,9 @@ $editModals"""
     ${csrfInput(ctx)}
     <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="重置密码：$name"><i class="bi bi-key me-1"></i>重置密码</button>
   </form>
-  <form method="post" action="/users/${u.id}/active" class="m-0"${if (u.active) """ data-confirm="停用 $name？对方会被立刻踢下线，不能再登录"""" else ""}>
+  <form method="post" action="/users/${u.id}/remove" class="m-0" data-confirm="移除 $name？对方会被立刻踢下线，不能再登录，发过的需求和补充信息会保留">
     ${csrfInput(ctx)}
-    <input type="hidden" name="active" value="${if (u.active) "0" else "1"}">
-    $toggle
+    <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="移除账号：$name"><i class="bi bi-person-x me-1"></i>移除</button>
   </form>
 </div>"""
     }
@@ -172,13 +162,12 @@ $editModals"""
         ctx.go("/users")
     }
 
-    fun userSetActive(ctx: Context) {
+    fun userRemove(ctx: Context) {
         val me = ctx.requireAdmin()
         val target = clientTarget(ctx)
-        val active = ctx.formParam("active") == "1"
-        UserRepo.setActive(target.id, active, me.id)
-        if (!active) Sessions.endAllFor(target.id)
-        ctx.flashOk(if (active) "账号已启用" else "账号已停用，对方已被强制下线")
+        UserRepo.remove(target, me.id)
+        Sessions.endAllFor(target.id)
+        ctx.flashOk("已移除 ${target.username}，对方已被强制下线")
         ctx.go("/users")
     }
 }

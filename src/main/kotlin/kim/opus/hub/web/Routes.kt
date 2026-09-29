@@ -40,7 +40,7 @@ object Routes {
         post("/users") { ctx -> AdminHandlers.userCreate(ctx) }
         post("/users/{id}") { ctx -> AdminHandlers.userUpdate(ctx) }
         post("/users/{id}/reset") { ctx -> AdminHandlers.userResetPassword(ctx) }
-        post("/users/{id}/active") { ctx -> AdminHandlers.userSetActive(ctx) }
+        post("/users/{id}/remove") { ctx -> AdminHandlers.userRemove(ctx) }
 
         r.get("/projects") { ctx -> ProjectHandlers.list(ctx) }
         post("/projects") { ctx -> ProjectHandlers.create(ctx) }

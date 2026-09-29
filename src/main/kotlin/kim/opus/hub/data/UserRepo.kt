@@ -8,15 +8,15 @@ object UserRepo {
     fun byId(id: Long): User? = Db.read { it.row("select * from users where id = ?", id, map = ::mapUser) }
 
     fun byUsername(username: String): User? = Db.read {
-        it.row("select * from users where lower(username) = lower(?)", username, map = ::mapUser)
+        it.row("select * from users where lower(username) = lower(?) and active = 1", username, map = ::mapUser)
     }
 
     fun passwordHash(id: Long): String? = Db.read {
         it.row("select password_hash from users where id = ?", id) { rs -> rs.getString(1) }
     }
 
-    fun all(): List<User> = Db.read {
-        it.rows("select * from users order by case role when 'admin' then 0 else 1 end, id", map = ::mapUser)
+    fun clients(): List<User> = Db.read {
+        it.rows("select * from users where role = ? and active = 1 order by id", ROLE_CLIENT, map = ::mapUser)
     }
 
     fun createAdmin(username: String, displayName: String, password: String): Long = Db.tx { c ->
@@ -50,8 +50,10 @@ object UserRepo {
         Audit.add(c, actor, "user", id, "password_changed")
     }
 
-    fun setActive(id: Long, active: Boolean, actor: Long?) = Db.tx { c ->
-        c.exec("update users set active = ? where id = ?", active, id)
-        Audit.add(c, actor, "user", id, if (active) "enabled" else "disabled")
+    fun remove(user: User, actor: Long) = Db.tx { c ->
+        c.exec("update users set active = 0 where id = ? and role = ?", user.id, ROLE_CLIENT)
+        c.exec("delete from project_members where user_id = ?", user.id)
+        c.exec("delete from comment_folds where user_id = ?", user.id)
+        Audit.add(c, actor, "user", user.id, "removed", "账号 " + user.username)
     }
 }

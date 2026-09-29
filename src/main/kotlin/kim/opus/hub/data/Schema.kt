@@ -263,6 +263,10 @@ object Schema {
             primary key (user_id, comment_id)
         );
         create index ix_comment_folds_comment on comment_folds(comment_id)
+        """,
+        14 to """
+        drop index if exists ux_users_username;
+        create unique index ux_users_username on users(lower(username)) where active = 1
         """
     )
 
