@@ -39,7 +39,7 @@ object ReqOrders {
     fun sql(key: String): String = when (key) {
         "newest" -> "r.created_at desc"
         "priority" -> "r.priority asc, r.updated_at desc"
-        "wanted" -> "(r.wanted_at is null) asc, r.wanted_at asc, r.updated_at desc"
+        "wanted" -> "(r.wanted_at is null) asc, case length(r.wanted_at) when 4 then r.wanted_at || '-99' when 7 then r.wanted_at || '-99' when 10 then r.wanted_at || 'T99' else r.wanted_at end asc, r.updated_at desc"
         else -> "r.updated_at desc"
     }
 

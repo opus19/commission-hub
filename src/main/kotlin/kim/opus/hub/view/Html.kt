@@ -162,9 +162,8 @@ fun pagination(page: Int, pages: Int, href: (Int) -> String): String {
 fun lateMark(r: Requirement): String =
     if (r.isOverdue) """<span class="wanted-late">已超期</span>""" else ""
 
-fun wantedTag(r: Requirement, compact: Boolean): String {
-    val full = r.wantedText ?: return ""
-    val text = if (compact) Wanted.short(r.wantedAt) ?: full else full
+fun wantedTag(r: Requirement): String {
+    val text = Wanted.short(r.wantedAt) ?: return ""
     return """<span class="d-inline-flex align-items-center wanted-tag${if (r.isOverdue) " is-overdue" else ""}"><i class="bi bi-calendar-event me-1"></i><span>期望交付 ${e(text)}</span>${lateMark(r)}</span>"""
 }
 
@@ -172,7 +171,7 @@ fun reqItem(v: RequirementView): String {
     val r = v.requirement
     val meta = buildString {
         append("""<span class="d-inline-flex align-items-center gap-2">${statusBadge(r.statusEnum)}${priorityBadge(r.priorityEnum)}</span>""")
-        append(wantedTag(r, compact = true))
+        append(wantedTag(r))
         if (v.commentCount > 0) {
             append("""<span class="d-inline-flex align-items-center"><i class="bi bi-chat-left me-1"></i><span class="fw-medium">${v.commentCount}</span><span class="ms-1">条补充信息</span></span>""")
         }

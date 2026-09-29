@@ -62,7 +62,7 @@ object RequirementHandlers {
     <div class="col-sm-6">
       <div class="mb-3">
         <label class="form-label" for="f_wanted_at">期望交付时间</label>
-        <input class="${cls("wanted_at")}" id="f_wanted_at" type="text" name="wanted_at" value="${e(f.wanted)}" placeholder="如 ${Wanted.EXAMPLE}" maxlength="40" autocomplete="off" spellcheck="false"${state("wanted_at", "f_wanted_at")}>
+        <input class="${cls("wanted_at")}" id="f_wanted_at" type="text" name="wanted_at" value="${e(f.wanted)}" placeholder="${Wanted.PLACEHOLDER}" maxlength="40" autocomplete="off" spellcheck="false"${state("wanted_at", "f_wanted_at")}>
         ${feedback("wanted_at", "f_wanted_at")}
       </div>
     </div>
@@ -206,7 +206,6 @@ object RequirementHandlers {
 <div class="d-flex flex-wrap align-items-center small mb-4 text-secondary border-bottom pb-3 gap-3 req-meta">
   <span>${createdTag(r.createdAt)}</span>
   <span>${timeTag(r.updatedAt, "更新于 ")}</span>
-  ${wantedTag(r, compact = false)}
   $edit
 </div>"""
 
