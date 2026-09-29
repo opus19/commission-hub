@@ -14,12 +14,8 @@ data class User(
 data class Project(
     val id: Long,
     val name: String,
-    val status: String,
     val createdAt: String
-) {
-    val statusEnum: ProjectStatus get() = ProjectStatus.of(status)
-    val isArchived: Boolean get() = statusEnum == ProjectStatus.ARCHIVED
-}
+)
 
 data class ProjectView(
     val project: Project,
@@ -50,13 +46,9 @@ data class Requirement(
 
 data class RequirementView(
     val requirement: Requirement,
-    val attachmentCount: Long,
-    val commentCount: Long,
-    val projectName: String,
-    val projectStatus: String
+    val projectName: String
 ) {
-    val projectArchived: Boolean get() = ProjectStatus.of(projectStatus) == ProjectStatus.ARCHIVED
-    val readOnly: Boolean get() = projectArchived || requirement.statusEnum == ReqStatus.ARCHIVED
+    val readOnly: Boolean get() = requirement.statusEnum == ReqStatus.ARCHIVED
 }
 
 data class Comment(

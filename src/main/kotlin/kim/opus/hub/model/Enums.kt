@@ -22,13 +22,3 @@ enum class Priority(val level: Int, val label: String, val longLabel: String, va
         fun of(level: Int): Priority = entries.firstOrNull { it.level == level } ?: NORMAL
     }
 }
-
-enum class ProjectStatus(val code: String, val label: String) {
-    ACTIVE("active", "进行中"),
-    PAUSED("paused", "已暂停"),
-    ARCHIVED("archived", "已归档");
-
-    companion object {
-        fun of(code: String?): ProjectStatus = entries.firstOrNull { it.code == code } ?: ACTIVE
-    }
-}

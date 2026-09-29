@@ -9,10 +9,7 @@ object ReqRepo {
     private val seqLock = ReentrantLock()
 
     private const val VIEW_SELECT = """
-        select r.*, p.name as project_name, p.status as project_status,
-            (select count(*) from attachments a where a.requirement_id = r.id)
-              + (select count(*) from attachments a join comments cm on cm.id = a.comment_id where cm.requirement_id = r.id) as attachment_count,
-            (select count(*) from comments cm where cm.requirement_id = r.id) as comment_count
+        select r.*, p.name as project_name
         from requirements r
         join projects p on p.id = r.project_id
     """
@@ -21,10 +18,7 @@ object ReqRepo {
 
     private fun mapView(rs: ResultSet) = RequirementView(
         requirement = mapRequirement(rs),
-        attachmentCount = rs.getLong("attachment_count"),
-        commentCount = rs.getLong("comment_count"),
-        projectName = rs.getString("project_name"),
-        projectStatus = rs.getString("project_status")
+        projectName = rs.getString("project_name")
     )
 
     private fun whereFor(q: ReqQuery, args: MutableList<Any?>): String {

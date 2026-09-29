@@ -172,6 +172,7 @@
     if (!form) return;
     form.dataset.sending = "";
     form.querySelectorAll("button[type=submit]").forEach(function (b) { b.disabled = false; });
+    form.querySelectorAll("input[data-confirm-name]").forEach(syncConfirmName);
   }
 
   function onLoginPage() {
@@ -306,6 +307,22 @@
     if (!(t instanceof HTMLTextAreaElement) || !t.form || !t.form.hasAttribute("data-composer")) return;
     var error = t.form.querySelector(".composer-error");
     if (error) error.hidden = true;
+  });
+
+  function syncConfirmName(input) {
+    if (!input.form) return;
+    var ok = input.value.trim() === (input.getAttribute("data-confirm-name") || "").trim();
+    input.form.querySelectorAll("button[type=submit]").forEach(function (b) { b.disabled = !ok; });
+  }
+
+  document.addEventListener("input", function (event) {
+    var t = event.target;
+    if (t instanceof HTMLInputElement && t.hasAttribute("data-confirm-name")) syncConfirmName(t);
+  });
+
+  document.addEventListener("shown.bs.modal", function (event) {
+    var input = event.target instanceof Element ? event.target.querySelector("input[data-confirm-name]") : null;
+    if (input) input.focus();
   });
 
   document.addEventListener("submit", function (event) {

@@ -170,12 +170,6 @@ fun reqItem(v: RequirementView): String {
     val r = v.requirement
     val meta = buildString {
         append("""<span class="d-inline-flex flex-wrap align-items-center gap-2">${statusBadge(r.statusEnum)}${priorityBadge(r.priorityEnum)}${wantedBadge(r, full = false)}</span>""")
-        if (v.commentCount > 0) {
-            append("""<span class="d-inline-flex align-items-center"><i class="bi bi-chat-left me-1"></i><span class="fw-medium">${v.commentCount}</span><span class="ms-1">条补充信息</span></span>""")
-        }
-        if (v.attachmentCount > 0) {
-            append("""<span class="d-inline-flex align-items-center"><i class="bi bi-paperclip me-1"></i><span class="fw-medium">${v.attachmentCount}</span><span class="ms-1">个附件</span></span>""")
-        }
         append("""<span>${timeTag(r.updatedAt, "更新于 ")}</span>""")
     }
     return """

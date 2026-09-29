@@ -36,15 +36,8 @@ object Access {
         return comment to requirement(user, comment.requirementId)
     }
 
-    fun openProject(user: User, projectId: Long): Project {
-        val project = project(user, projectId)
-        if (project.isArchived) throw ForbiddenResponse("项目已归档，现在是只读的")
-        return project
-    }
-
     fun writable(view: RequirementView) {
-        if (view.projectArchived) throw ForbiddenResponse("项目已归档，现在是只读的")
-        if (view.requirement.statusEnum == ReqStatus.ARCHIVED) throw ForbiddenResponse("需求已归档，现在是只读的")
+        if (view.readOnly) throw ForbiddenResponse("需求已归档，现在是只读的")
     }
 
     fun attachment(user: User, attachmentId: Long): Pair<Attachment, RequirementView> {
@@ -61,7 +54,6 @@ object Access {
 
 object Transitions {
     fun allowed(user: User, view: RequirementView): List<ReqStatus> {
-        if (view.projectArchived) return emptyList()
         val current = view.requirement.statusEnum
         return when {
             current == ReqStatus.ARCHIVED -> if (user.isAdmin) listOf(ReqStatus.TODO) else emptyList()
@@ -72,7 +64,6 @@ object Transitions {
     }
 
     fun check(user: User, view: RequirementView, target: ReqStatus) {
-        if (view.projectArchived) throw ForbiddenResponse("项目已归档，现在是只读的")
         if (target !in allowed(user, view)) {
             throw ForbiddenResponse("当前状态不允许改成「${target.label}」")
         }

@@ -46,7 +46,7 @@ object Routes {
         post("/projects") { ctx -> ProjectHandlers.create(ctx) }
         r.get("/projects/{id}") { ctx -> ProjectHandlers.detail(ctx) }
         post("/projects/{id}") { ctx -> ProjectHandlers.update(ctx) }
-        post("/projects/{id}/unarchive") { ctx -> ProjectHandlers.unarchive(ctx) }
+        post("/projects/{id}/delete") { ctx -> ProjectHandlers.delete(ctx) }
         r.get("/projects/{id}/releases") { ctx -> ctx.go("/projects/" + ctx.idParam()) }
 
         r.get("/requirements/new") { ctx -> RequirementHandlers.newPage(ctx) }

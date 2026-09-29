@@ -21,8 +21,7 @@ object AdminHandlers {
         else """<div class="project-check-list">${
             projects.joinToString("") { p ->
                 val id = "${prefix}_${p.id}"
-                val suffix = if (p.statusEnum != ProjectStatus.ACTIVE) """<span class="text-secondary ms-1">（${e(p.statusEnum.label)}）</span>""" else ""
-                """<div class="form-check"><input class="form-check-input" type="checkbox" name="projects" value="${p.id}" id="$id"${if (p.id in selected) " checked" else ""}><label class="form-check-label" for="$id">${e(p.name)}$suffix</label></div>"""
+                """<div class="form-check"><input class="form-check-input" type="checkbox" name="projects" value="${p.id}" id="$id"${if (p.id in selected) " checked" else ""}><label class="form-check-label" for="$id">${e(p.name)}</label></div>"""
             }
         }</div>"""
         return """

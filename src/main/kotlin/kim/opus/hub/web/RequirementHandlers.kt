@@ -31,11 +31,8 @@ object RequirementHandlers {
         return wanted to errors
     }
 
-    private fun readOnlyReason(view: RequirementView): String? = when {
-        view.projectArchived -> "所属项目已归档，这条需求现在是只读的"
-        view.requirement.statusEnum == ReqStatus.ARCHIVED -> "这条需求已归档，现在是只读的"
-        else -> null
-    }
+    private fun readOnlyReason(view: RequirementView): String? =
+        if (view.readOnly) "这条需求已归档，现在是只读的" else null
 
     private fun form(ctx: Context, action: String, submit: String, cancelHref: String, f: ReqForm, projectId: Long?, errors: Map<String, String>): String {
         val projectField = if (projectId == null) "" else """<input type="hidden" name="project_id" value="$projectId">"""
@@ -96,18 +93,13 @@ object RequirementHandlers {
             return
         }
         val project = Access.project(user, projectId)
-        if (project.isArchived) {
-            ctx.flashErr("项目已归档，不能再新建需求")
-            ctx.go("/projects/${project.id}")
-            return
-        }
         renderNew(ctx, project, ReqForm("", "", Priority.NORMAL.level, ""), emptyMap())
     }
 
     fun create(ctx: Context) {
         val user = ctx.user()
         val projectId = ctx.formParam("project_id")?.toLongOrNull() ?: throw NotFoundResponse("项目不存在")
-        val project = Access.openProject(user, projectId)
+        val project = Access.project(user, projectId)
         val f = readForm(ctx)
         val (wanted, errors) = check(f)
         if (errors.isNotEmpty()) {
@@ -185,7 +177,6 @@ object RequirementHandlers {
         if (!view.readOnly) return ""
         val r = view.requirement
         val text = when {
-            view.projectArchived -> "所属项目已归档，不能再编辑或添加补充信息"
             r.closedAt != null -> "归档于 ${formatStamp(r.closedAt)}，不能再编辑或添加补充信息"
             else -> "已归档，不能再编辑或添加补充信息"
         }
@@ -241,10 +232,6 @@ object RequirementHandlers {
     private fun adminStatusCard(ctx: Context, view: RequirementView): String {
         val r = view.requirement
         val current = r.statusEnum
-        if (view.projectArchived) {
-            val body = """<div class="small text-secondary">项目已归档，先到<a href="/projects/${r.projectId}">项目页</a>取消归档</div>"""
-            return sideCard("推进状态", body)
-        }
         if (current == ReqStatus.ARCHIVED) {
             val body = """
 <form method="post" action="/requirements/${r.id}/status" class="m-0">

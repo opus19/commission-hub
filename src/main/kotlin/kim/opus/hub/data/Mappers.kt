@@ -15,7 +15,6 @@ internal fun mapUser(rs: ResultSet) = User(
 internal fun mapProject(rs: ResultSet) = Project(
     id = rs.getLong("id"),
     name = rs.getString("name"),
-    status = rs.getString("status"),
     createdAt = rs.getString("created_at")
 )
 
