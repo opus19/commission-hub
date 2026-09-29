@@ -191,20 +191,16 @@ object RequirementHandlers {
         val versions = VersionRepo.forRequirement(r.id)
         val targets = Transitions.allowed(user, view)
 
-        val edit = if (view.readOnly) "" else """<a class="link-secondary" href="/requirements/${r.id}/edit"><i class="bi bi-pencil me-1"></i>编辑</a>"""
-
-        val meta = """
-<div class="d-flex flex-wrap align-items-center small mb-4 text-secondary border-bottom pb-3 gap-3 req-meta">
-  <span>${createdTag(r.createdAt)}</span>
-  <span>${timeTag(r.updatedAt, "更新于 ")}</span>
-  $edit
-</div>"""
+        val edit = if (view.readOnly) "" else
+            """<a class="link-secondary req-edit" href="/requirements/${r.id}/edit" aria-label="编辑需求"><i class="bi bi-pencil" aria-hidden="true"></i>编辑</a>"""
 
         val question = """
 <div>
   ${readOnlyBanner(view)}
-  <h1 class="h3 mb-2 text-wrap text-break pb-1">${e(r.title)}</h1>
-  $meta
+  <div class="d-flex align-items-baseline gap-3 border-bottom pb-3 mb-4">
+    <h1 class="h3 mb-0 flex-grow-1 min-w-0 text-wrap text-break">${e(r.title)}</h1>
+    $edit
+  </div>
   ${if (!user.isAdmin) clientActionBox(ctx, r, targets) else ""}
   ${if (r.body.isNullOrBlank()) "" else """<article class="fmt text-break text-wrap last-p">${richText(r.body)}</article>"""}
 </div>"""
