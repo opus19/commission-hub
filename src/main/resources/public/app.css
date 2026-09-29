@@ -694,10 +694,6 @@ a[data-href]:not([class]):hover {
   color: #89d185;
 }
 
-.alert-danger > .bi {
-  color: #f48771;
-}
-
 .alert {
   --bs-alert-border-radius: 4px;
   font-size: .8125rem;
@@ -771,13 +767,6 @@ a[data-href]:not([class]):hover {
   align-items: center;
   gap: .5rem .4rem;
   padding: .75rem 1rem;
-}
-
-.notice-bar > .bi {
-  display: inline-flex;
-  flex: none;
-  line-height: 1;
-  color: #e2c08d;
 }
 
 .accept-bar {

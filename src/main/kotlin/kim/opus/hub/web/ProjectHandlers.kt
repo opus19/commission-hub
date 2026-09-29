@@ -87,7 +87,7 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-danger notice-bar mb-3" role="alert"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span class="fw-bold">删除后无法恢复</span></div>
+        <div class="alert alert-danger notice-bar mb-3" role="alert"><span class="fw-bold">删除后无法恢复</span></div>
         <p class="small mb-3">项目 <strong class="text-break">$name</strong> 里的所有需求，以及它们的补充信息、附件和上传的版本都会被永久删除，客户也看不到这个项目了</p>
         <label class="form-label" for="dp_name">输入项目名称 <strong class="text-break">$name</strong> 确认删除</label>
         <input class="form-control" id="dp_name" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$name">

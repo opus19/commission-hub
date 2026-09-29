@@ -18,7 +18,7 @@ object AuthHandlers {
         val nextField = if (next == null) "" else """<input type="hidden" name="next" value="${e(next)}">"""
         val body = """
 <div class="col-md-6 col-lg-4 mx-auto" style="max-width:360px">
-  ${if (error != null) """<div class="alert alert-danger d-flex align-items-center" role="alert"><i class="bi bi-exclamation-triangle-fill me-2"></i><div>${e(error)}</div></div>""" else ""}
+  ${if (error != null) """<div class="alert alert-danger" role="alert">${e(error)}</div>""" else ""}
   <form method="post" action="/login">
     $nextField
     <div class="mb-3">

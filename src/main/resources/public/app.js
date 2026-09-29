@@ -111,8 +111,6 @@
     el.className = "alert alert-danger alert-dismissible fade show d-flex align-items-start flash";
     el.setAttribute("role", "alert");
     el.setAttribute("data-autohide", "6000");
-    var icon = document.createElement("i");
-    icon.className = "bi bi-exclamation-triangle-fill me-2";
     var msg = document.createElement("div");
     msg.className = "flex-fill text-break";
     msg.textContent = text;
@@ -121,7 +119,6 @@
     close.className = "btn-close";
     close.setAttribute("data-bs-dismiss", "alert");
     close.setAttribute("aria-label", "关闭");
-    el.appendChild(icon);
     el.appendChild(msg);
     el.appendChild(close);
     stack.appendChild(el);

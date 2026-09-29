@@ -161,7 +161,6 @@ object RequirementHandlers {
         if (ReqStatus.ARCHIVED !in targets) return ""
         return """
 <div class="alert alert-warning notice-bar accept-bar mb-4" role="status">
-  <i class="bi bi-bell-fill" aria-hidden="true"></i>
   <span class="fw-bold">这条需求等你验收</span>
   <div class="accept-actions">
     <form method="post" action="/requirements/${r.id}/status" class="m-0">

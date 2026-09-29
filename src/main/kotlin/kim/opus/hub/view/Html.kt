@@ -279,14 +279,14 @@ private fun statusBar(ctx: Context, user: User, active: String): String {
 </footer>"""
 }
 
-private fun flashItem(kind: String, icon: String, text: String, role: String, hideMs: Int?): String =
-    """<div class="alert alert-$kind alert-dismissible fade show d-flex align-items-start flash" role="$role"${if (hideMs != null) """ data-autohide="$hideMs"""" else ""}><i class="bi $icon me-2"></i><div class="flex-fill text-break">${e(text)}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button></div>"""
+private fun flashItem(kind: String, icon: String?, text: String, role: String, hideMs: Int?): String =
+    """<div class="alert alert-$kind alert-dismissible fade show d-flex align-items-start flash" role="$role"${if (hideMs != null) """ data-autohide="$hideMs"""" else ""}>${if (icon == null) "" else """<i class="bi $icon me-2"></i>"""}<div class="flex-fill text-break">${e(text)}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button></div>"""
 
 private fun flashHtml(ok: String?, err: String?, keep: Boolean): String {
     if (ok == null && err == null) return ""
     val items = buildString {
         if (ok != null) append(flashItem("success", "bi-check-circle-fill", ok, "status", if (keep) null else 3000))
-        if (err != null) append(flashItem("danger", "bi-exclamation-triangle-fill", err, "alert", 6000))
+        if (err != null) append(flashItem("danger", null, err, "alert", 6000))
     }
     return """<div class="flash-stack">$items</div>"""
 }
