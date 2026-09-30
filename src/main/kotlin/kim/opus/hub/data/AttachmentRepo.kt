@@ -11,11 +11,11 @@ object AttachmentRepo {
         Audit.add(c, actor, "attachment", id, "deleted")
     }
 
-    fun forRequirement(requirementId: Long): List<Attachment> = Db.read {
-        it.rows("select * from attachments where requirement_id = ? and comment_id is null order by id", requirementId, map = ::mapAttachment)
+    fun forItems(requirementId: Long): List<Attachment> = Db.read {
+        it.rows("select * from attachments where requirement_id = ? and item_id is not null order by id", requirementId, map = ::mapAttachment)
     }
 
-    fun add(c: Connection, requirementId: Long, itemId: Long?, userId: Long, files: List<NewFile>, stamp: String) {
+    fun add(c: Connection, requirementId: Long, itemId: Long, userId: Long, files: List<NewFile>, stamp: String) {
         files.forEach { f ->
             c.insert(
                 "insert into attachments(requirement_id, comment_id, item_id, user_id, original_name, stored_name, size_bytes, content_type, created_at) values(?, null, ?, ?, ?, ?, ?, ?, ?)",
@@ -26,7 +26,7 @@ object AttachmentRepo {
 
     fun remove(c: Connection, requirementId: Long, ids: Set<Long>, actor: Long): List<String> = ids.mapNotNull { id ->
         val found = c.row(
-            "select stored_name, original_name from attachments where id = ? and requirement_id = ? and comment_id is null",
+            "select stored_name, original_name from attachments where id = ? and requirement_id = ? and item_id is not null",
             id, requirementId
         ) { rs -> rs.getString(1) to rs.getString(2) } ?: return@mapNotNull null
         c.exec("delete from attachments where id = ?", id)

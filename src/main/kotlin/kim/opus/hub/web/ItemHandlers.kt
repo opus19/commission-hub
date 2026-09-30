@@ -10,7 +10,7 @@ import kim.opus.hub.view.*
 object ItemHandlers {
 
     const val MAX_ITEMS = 200
-    const val MAX_LENGTH = 500
+    const val MAX_LENGTH = 2000
     const val NEED_TEXT = "有附件的清单项要写上内容"
 
     private val REF = Regex("[A-Za-z0-9]{1,24}")
@@ -20,7 +20,7 @@ object ItemHandlers {
     class EditRow(val ref: String, val body: String, val saved: List<Attachment>, val invalid: Boolean)
 
     fun stageMark(view: RequirementView): ItemMark =
-        if (view.requirement.statusEnum == ReqStatus.TESTING) ItemMark.TESTED else ItemMark.DONE
+        if (view.requirement.statusEnum == ReqStatus.TODO) ItemMark.DONE else ItemMark.TESTED
 
     private fun stageOpen(user: User, view: RequirementView, mark: ItemMark): Boolean = when {
         view.readOnly -> false
@@ -40,13 +40,13 @@ object ItemHandlers {
             val ref = refs.getOrNull(i)?.trim().orEmpty()
             val own = REF.matches(ref) && used.add(ref)
             val files = if (own) ctx.uploadedFiles("item_files_$ref").filter { it.size() > 0 } else emptyList()
-            val body = raw.replace('\r', ' ').replace('\n', ' ').trim().take(MAX_LENGTH)
+            val body = raw.replace("\r\n", "\n").replace('\r', '\n').trim().take(MAX_LENGTH)
             val id = if (own) ref.toLongOrNull() else null
             if (body.isEmpty() && files.isEmpty() && id == null) null else Row(id, body, files)
         }
     }
 
-    fun section(ctx: Context, user: User, view: RequirementView, items: List<ReqItem>, files: Map<Long, List<Attachment>>, spaced: Boolean): String {
+    fun section(ctx: Context, user: User, view: RequirementView, items: List<ReqItem>, files: Map<Long, List<Attachment>>): String {
         if (items.isEmpty()) return ""
         val mark = stageMark(view)
         val open = stageOpen(user, view, mark)
@@ -72,7 +72,7 @@ object ItemHandlers {
         val folded = ItemRepo.folded(user.id, rid)
         val listId = "ri-list-$rid"
         val head = """<button class="req-list-head" type="button" data-items-fold="/requirements/$rid/items/fold" aria-expanded="${!folded}" aria-controls="$listId" title="${if (folded) "展开" else "收起"}"><i class="bi bi-chevron-right" aria-hidden="true"></i><span>需求清单</span></button>"""
-        val cls = "req-list" + (if (folded) " is-folded" else "") + (if (spaced) " mt-3" else "")
+        val cls = "req-list" + if (folded) " is-folded" else ""
         return """<div class="$cls" id="checklist" data-csrf="${e(ctx.session().csrf)}">$head<ul class="req-items" id="$listId" aria-label="需求清单">$rows</ul></div>"""
     }
 
@@ -98,15 +98,17 @@ object ItemHandlers {
         val fileName = if (ref.isEmpty()) "" else "item_files_$ref"
         val chips = row?.saved.orEmpty().joinToString("") { savedFileChip(it) }
         val invalid = row?.invalid == true
-        val cls = if (invalid) "form-control form-control-sm is-invalid" else "form-control form-control-sm"
+        val cls = if (invalid) "form-control form-control-sm req-edit-text is-invalid" else "form-control form-control-sm req-edit-text"
         val aria = (if (invalid) """ aria-invalid="true" aria-describedby="f_items_err"""" else "") + if (focus) " autofocus" else ""
-        return """<div class="req-edit-item" data-item-row data-att-scope><div class="req-edit-line"><input type="hidden" name="item_ref" value="$ref"><input class="$cls" type="text" name="item_text" value="${e(row?.body)}" maxlength="$MAX_LENGTH" autocomplete="off" aria-label="清单项"$aria><input class="composer-file-input" type="file" id="$fileId"${if (fileName.isEmpty()) "" else """ name="$fileName""""} data-att-name="$fileName" multiple data-att-input data-max-bytes="${Uploads.limitBytes}" aria-label="给这一项添加附件"><label class="req-edit-tool" for="$fileId" data-att-label title="添加附件"><i class="bi bi-paperclip" aria-hidden="true"></i></label><button class="req-edit-del" type="button" data-item-del title="删掉这一项" aria-label="删掉这一项"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><div class="att-list" data-att-list${if (chips.isEmpty()) " hidden" else ""}>$chips</div></div>"""
+        return """<div class="req-edit-item" data-item-row data-att-scope><div class="req-edit-line"><input type="hidden" name="item_ref" value="$ref"><div class="req-edit-field" data-item-field><textarea class="$cls" name="item_text" rows="1" maxlength="$MAX_LENGTH" autocomplete="off" aria-label="清单项"$aria>${e(row?.body)}</textarea></div><input class="composer-file-input" type="file" id="$fileId"${if (fileName.isEmpty()) "" else """ name="$fileName""""} data-att-name="$fileName" multiple data-att-input data-max-bytes="${Uploads.limitBytes}" aria-label="给这一项添加附件"><label class="req-edit-tool" for="$fileId" data-att-label title="添加附件"><i class="bi bi-paperclip" aria-hidden="true"></i></label><button class="req-edit-del" type="button" data-item-del title="删掉这一项" aria-label="删掉这一项"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><div class="att-list" data-att-list${if (chips.isEmpty()) " hidden" else ""}>$chips</div></div>"""
     }
 
-    fun editor(rows: List<EditRow>, error: String?, focusAt: Int): String = """
+    fun editor(rows: List<EditRow>, error: String?, focusAt: Int, filesError: String?): String = """
 <div class="mb-3" data-items-editor>
-  <div class="req-edit-items" data-item-list role="group" aria-label="需求清单">${rows.mapIndexed { i, row -> editRow(row, i == focusAt) }.joinToString("")}</div>
+  <div class="form-label" id="f_items_label">需求清单</div>
+  <div class="req-edit-items" data-item-list role="group" aria-labelledby="f_items_label">${rows.ifEmpty { listOf(EditRow("r0", "", emptyList(), false)) }.mapIndexed { i, row -> editRow(row, i == focusAt) }.joinToString("")}</div>
   <div class="invalid-feedback${if (error != null) " d-block" else ""}" id="f_items_err" data-items-error>${e(error ?: NEED_TEXT)}</div>
+  ${if (filesError == null) "" else """<div class="invalid-feedback d-block">${e(filesError)}</div>"""}
   <button class="req-edit-add" type="button" data-item-add><i class="bi bi-plus-lg" aria-hidden="true"></i>添加一项</button>
   <template data-item-template>${editRow(null, false)}</template>
 </div>"""

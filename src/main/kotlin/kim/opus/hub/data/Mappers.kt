@@ -23,7 +23,6 @@ internal fun mapRequirement(rs: ResultSet) = Requirement(
     projectId = rs.getLong("project_id"),
     seq = rs.getInt("seq"),
     title = rs.getString("title"),
-    body = rs.getString("body"),
     status = rs.getString("status"),
     priority = rs.getInt("priority"),
     createdBy = rs.getLong("created_by"),

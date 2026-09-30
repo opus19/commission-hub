@@ -30,7 +30,6 @@ data class Requirement(
     val projectId: Long,
     val seq: Int,
     val title: String,
-    val body: String?,
     val status: String,
     val priority: Int,
     val createdBy: Long,
@@ -84,11 +83,10 @@ data class NewFile(
 )
 
 data class FileChanges(
-    val body: List<NewFile>,
     val items: List<List<NewFile>>,
     val removed: Set<Long>
 ) {
-    val stored: List<NewFile> get() = body + items.flatten()
+    val stored: List<NewFile> get() = items.flatten()
 }
 
 data class VersionFile(

@@ -3,7 +3,6 @@ package kim.opus.hub.web
 import io.javalin.http.BadRequestResponse
 import io.javalin.http.Context
 import io.javalin.http.NotFoundResponse
-import io.javalin.http.UploadedFile
 import kim.opus.hub.data.*
 import kim.opus.hub.model.*
 import kim.opus.hub.view.*
@@ -14,35 +13,29 @@ object RequirementHandlers {
 
     private class ReqForm(
         val title: String,
-        val body: String,
         val priority: Int,
         val wanted: String,
         val items: List<ItemHandlers.Row>,
-        val bodyFiles: List<UploadedFile>,
         val removed: Set<Long>
     ) {
-        val hasFiles: Boolean get() = bodyFiles.isNotEmpty() || items.any { it.files.isNotEmpty() }
+        val hasFiles: Boolean get() = items.any { it.files.isNotEmpty() }
     }
 
     private fun readForm(ctx: Context): ReqForm = ReqForm(
         title = ctx.formParam("title")?.trim()?.take(200).orEmpty(),
-        body = ctx.formParam("body")?.replace("\r\n", "\n")?.trim()?.take(20000).orEmpty(),
         priority = Priority.of(ctx.formParam("priority")?.toIntOrNull() ?: Priority.NORMAL.level).level,
         wanted = ctx.formParam("wanted_at")?.trim()?.take(40).orEmpty(),
         items = ItemHandlers.readForm(ctx),
-        bodyFiles = ctx.uploadedFiles("body_files").filter { it.size() > 0 },
         removed = ctx.formParams("att_remove").mapNotNull { it.trim().toLongOrNull() }.toSet()
     )
 
-    private fun blankForm(): ReqForm = ReqForm("", "", Priority.NORMAL.level, "", emptyList(), emptyList(), emptySet())
+    private fun blankForm(): ReqForm = ReqForm("", Priority.NORMAL.level, "", emptyList(), emptySet())
 
     private fun formOf(r: Requirement): ReqForm = ReqForm(
         r.title,
-        r.body.orEmpty(),
         r.priority,
         Wanted.full(r.wantedAt).orEmpty(),
         ItemRepo.forRequirement(r.id).map { ItemHandlers.Row(it.id, it.body, emptyList()) },
-        emptyList(),
         emptySet()
     )
 
@@ -64,9 +57,8 @@ object RequirementHandlers {
     private fun store(f: ReqForm, rows: List<ItemHandlers.Row>): FileChanges {
         val done = ArrayList<NewFile>()
         try {
-            val body = Uploads.storeAll(f.bodyFiles).also { done.addAll(it) }
             val items = rows.map { row -> Uploads.storeAll(row.files).also { done.addAll(it) } }
-            return FileChanges(body, items, f.removed)
+            return FileChanges(items, f.removed)
         } catch (ex: Exception) {
             done.forEach { Uploads.deleteQuietly(it.storedName) }
             throw ex
@@ -75,20 +67,6 @@ object RequirementHandlers {
 
     private fun readOnlyReason(view: RequirementView): String? =
         if (view.readOnly) "这条需求已归档，现在是只读的" else null
-
-    private fun bodyField(value: String, files: List<Attachment>, error: String?): String = """
-<div class="mb-3">
-  <label class="form-label" for="f_body">具体需求</label>
-  <div class="composer req-body-box" data-att-scope>
-    <textarea class="form-control composer-input" id="f_body" name="body" rows="8">${e(value)}</textarea>
-    <div class="att-list" data-att-list${if (files.isEmpty()) " hidden" else ""}>${files.joinToString("") { savedFileChip(it) }}</div>
-    <div class="composer-bar">
-      <input class="composer-file-input" id="f_body_files" type="file" name="body_files" data-att-name="body_files" multiple data-att-input data-max-bytes="${Uploads.limitBytes}">
-      <label class="composer-attach" for="f_body_files"><i class="bi bi-paperclip me-1" aria-hidden="true"></i>添加附件</label>
-    </div>
-  </div>
-  ${if (error == null) "" else """<div class="invalid-feedback d-block">${e(error)}</div>"""}
-</div>"""
 
     private fun form(ctx: Context, action: String, submit: String, cancelHref: String, f: ReqForm, projectId: Long?, errors: Map<String, String>, saved: List<Attachment>): String {
         val projectField = if (projectId == null) "" else """<input type="hidden" name="project_id" value="$projectId">"""
@@ -118,8 +96,7 @@ object RequirementHandlers {
     <input class="${cls("title")}" id="f_title" type="text" name="title" value="${e(f.title)}" placeholder="一句话说清要做什么" maxlength="200" autocomplete="off"${state("title", "f_title")}>
     ${feedback("title", "f_title")}
   </div>
-  ${bodyField(f.body, live.filter { it.itemId == null }, errors["files"])}
-  ${ItemHandlers.editor(rows, errors["items"], if (first == "items") rows.indexOfFirst { it.invalid } else -1)}
+  ${ItemHandlers.editor(rows, errors["items"], if (first == "items") rows.indexOfFirst { it.invalid } else -1, errors["files"])}
   <div class="row g-3">
     <div class="col-sm-6">${selectField("优先级", "priority", Priority.entries.map { it.level.toString() to it.label }, f.priority.toString())}</div>
     <div class="col-sm-6">
@@ -179,7 +156,6 @@ object RequirementHandlers {
             ReqRepo.create(
                 projectId = project.id,
                 title = f.title,
-                body = f.body.ifEmpty { null },
                 status = ReqStatus.TODO,
                 priority = f.priority,
                 wantedAt = wanted,
@@ -205,7 +181,7 @@ object RequirementHandlers {
             ctx.go("/requirements/${r.id}")
             return
         }
-        renderEdit(ctx, r, formOf(r), emptyMap(), AttachmentRepo.forRequirement(r.id))
+        renderEdit(ctx, r, formOf(r), emptyMap(), AttachmentRepo.forItems(r.id))
     }
 
     fun update(ctx: Context) {
@@ -214,7 +190,7 @@ object RequirementHandlers {
         Access.writable(view)
         val r = view.requirement
         val f = readForm(ctx)
-        val saved = AttachmentRepo.forRequirement(r.id)
+        val saved = AttachmentRepo.forItems(r.id)
         val (wanted, errors) = check(f, saved)
         if (errors.isNotEmpty()) {
             ctx.status(400)
@@ -227,7 +203,6 @@ object RequirementHandlers {
             ReqRepo.update(
                 id = r.id,
                 title = f.title,
-                body = f.body.ifEmpty { null },
                 priority = f.priority,
                 wantedAt = wanted,
                 items = rows.map { ItemInput(it.id, it.body) },
@@ -241,16 +216,6 @@ object RequirementHandlers {
         gone.forEach { Uploads.deleteQuietly(it) }
         ctx.flashOk("需求已保存")
         ctx.go("/requirements/${r.id}")
-    }
-
-    private fun bodyFiles(ctx: Context, files: List<Attachment>, spaced: Boolean): String {
-        if (files.isEmpty()) return ""
-        val (pictures, others) = files.partition { imageType(it.originalName) != null }
-        val gallery = if (pictures.isEmpty()) "" else
-            """<div class="tl-images">${pictures.joinToString("") { CommentHandlers.imageItem(ctx, false, it) }}</div>"""
-        val chips = if (others.isEmpty()) "" else
-            """<div class="tl-files">${others.joinToString("") { CommentHandlers.fileChip(ctx, false, it) }}</div>"""
-        return """<div class="req-files${if (spaced) " mt-3" else ""}">$gallery$chips</div>"""
     }
 
     private fun clientActionBox(ctx: Context, r: Requirement, targets: List<ReqStatus>): String {
@@ -285,10 +250,7 @@ object RequirementHandlers {
         val comments = CommentRepo.forRequirement(r.id)
         val versions = VersionRepo.forRequirement(r.id)
         val items = ItemRepo.forRequirement(r.id)
-        val saved = AttachmentRepo.forRequirement(r.id)
-        val attached = saved.filter { it.itemId == null }
-        val itemFiles = saved.filter { it.itemId != null }.groupBy { it.itemId!! }
-        val hasBody = !r.body.isNullOrBlank()
+        val itemFiles = AttachmentRepo.forItems(r.id).filter { it.itemId != null }.groupBy { it.itemId!! }
         val targets = Transitions.allowed(user, view)
 
         val edit = if (view.readOnly) "" else
@@ -302,9 +264,7 @@ object RequirementHandlers {
     $edit
   </div>
   ${if (!user.isAdmin) clientActionBox(ctx, r, targets) else ""}
-  ${if (!hasBody) "" else """<article class="fmt text-break text-wrap last-p">${Markdown.render(r.body.orEmpty())}</article>"""}
-  ${bodyFiles(ctx, attached, spaced = hasBody)}
-  ${ItemHandlers.section(ctx, user, view, items, itemFiles, spaced = hasBody || attached.isNotEmpty())}
+  ${ItemHandlers.section(ctx, user, view, items, itemFiles)}
 </div>"""
 
         val main = question + CommentHandlers.section(ctx, user, view, comments)
@@ -346,13 +306,7 @@ object RequirementHandlers {
                 """<form method="post" action="/requirements/${r.id}/status" class="status-step-cell">${csrfInput(ctx)}<input type="hidden" name="to" value="${s.code}"><button class="status-step" type="submit">${e(text)}</button></form>"""
             }
         }
-        val hint = when (current) {
-            ReqStatus.TESTING -> "等客户验收，通过后自动归档"
-            else -> "开发好了点「待测试」让客户验收"
-        }
-        val body = """
-<div class="status-steps" role="group" aria-label="推进状态">$buttons</div>
-<div class="small text-secondary mt-3">${e(hint)}</div>"""
+        val body = """<div class="status-steps" role="group" aria-label="推进状态">$buttons</div>"""
         return sideCard("推进状态", body)
     }
 

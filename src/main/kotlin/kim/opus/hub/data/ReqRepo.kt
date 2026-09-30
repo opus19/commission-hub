@@ -65,7 +65,6 @@ object ReqRepo {
     fun create(
         projectId: Long,
         title: String,
-        body: String?,
         status: ReqStatus,
         priority: Int,
         wantedAt: String?,
@@ -80,10 +79,10 @@ object ReqRepo {
                 val stamp = nowIso()
                 val id = c.insert(
                     """
-                    insert into requirements(project_id, seq, title, body, status, priority, on_hold, created_by, created_at, updated_at, wanted_at)
-                    values(?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                    insert into requirements(project_id, seq, title, status, priority, on_hold, created_by, created_at, updated_at, wanted_at)
+                    values(?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
                     """.trimIndent(),
-                    projectId, seq, title, body, status.code, priority, actor, stamp, stamp, wantedAt
+                    projectId, seq, title, status.code, priority, actor, stamp, stamp, wantedAt
                 )
                 val saved = ItemRepo.replace(c, id, items)
                 Audit.add(c, actor, "requirement", id, "created", title)
@@ -98,7 +97,6 @@ object ReqRepo {
     fun update(
         id: Long,
         title: String,
-        body: String?,
         priority: Int,
         wantedAt: String?,
         items: List<ItemInput>,
@@ -106,8 +104,8 @@ object ReqRepo {
         actor: Long
     ): List<String> = Db.tx { c ->
         c.exec(
-            "update requirements set title = ?, body = ?, priority = ?, wanted_at = ?, updated_at = ? where id = ?",
-            title, body, priority, wantedAt, nowIso(), id
+            "update requirements set title = ?, priority = ?, wanted_at = ?, updated_at = ? where id = ?",
+            title, priority, wantedAt, nowIso(), id
         )
         val removed = AttachmentRepo.remove(c, id, files.removed, actor)
         val saved = ItemRepo.replace(c, id, items)
@@ -118,7 +116,6 @@ object ReqRepo {
 
     private fun attach(c: Connection, id: Long, itemIds: List<Long>, files: FileChanges, actor: Long) {
         val stamp = nowIso()
-        AttachmentRepo.add(c, id, null, actor, files.body, stamp)
         files.items.forEachIndexed { i, list ->
             val itemId = itemIds.getOrNull(i) ?: return@forEachIndexed
             AttachmentRepo.add(c, id, itemId, actor, list, stamp)

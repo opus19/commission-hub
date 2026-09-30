@@ -291,6 +291,32 @@ object Schema {
             primary key (user_id, requirement_id)
         );
         create index ix_item_folds_req on item_folds(requirement_id)
+        """,
+        18 to """
+        create temp table v18_move as
+            select a.id as att_id,
+                   (select min(b.id) from attachments b
+                     where b.requirement_id = a.requirement_id and b.user_id = a.user_id and b.created_at = a.created_at
+                       and b.comment_id is null and b.item_id is null) as grp
+            from attachments a
+            where a.requirement_id is not null and a.comment_id is null and a.item_id is null;
+
+        insert into comments(requirement_id, user_id, body, created_at)
+            select a.requirement_id, a.user_id, '__hub_v18_att__' || a.id, a.created_at
+            from attachments a
+            where a.id in (select grp from v18_move)
+            order by a.id;
+
+        update attachments
+            set comment_id = (select cm.id from comments cm where cm.body = '__hub_v18_att__' || (select m.grp from v18_move m where m.att_id = attachments.id)),
+                requirement_id = null
+            where id in (select att_id from v18_move);
+
+        update comments set body = '' where substr(body, 1, 15) = '__hub_v18_att__';
+
+        drop table v18_move;
+
+        update requirements set body = null
         """
     )
 
