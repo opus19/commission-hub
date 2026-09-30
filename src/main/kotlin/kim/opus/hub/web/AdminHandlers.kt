@@ -87,7 +87,7 @@ object AdminHandlers {
         val main = """
 <h3 class="mb-3">账号</h3>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
-  <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#newAccount"><i class="bi bi-person-plus me-1"></i>新建客户账号</button>
+  <button class="btn btn-primary btn-sm" type="button" data-island-modal="#newAccount"><i class="bi bi-person-plus me-1"></i>新建客户账号</button>
 </div>
 $table
 $createModal
@@ -99,7 +99,7 @@ $editModals"""
         val name = e(u.username)
         return """
 <div class="d-flex flex-nowrap align-items-center gap-2">
-  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#editUser${u.id}" aria-label="编辑账号：$name"><i class="bi bi-pencil me-1"></i>编辑</button>
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-island-modal="#editUser${u.id}" aria-label="编辑账号：$name"><i class="bi bi-pencil me-1"></i>编辑</button>
   <form method="post" action="/users/${u.id}/reset" class="m-0" data-confirm="重置 $name 的密码？旧密码会立即失效">
     ${csrfInput(ctx)}
     <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="重置密码：$name"><i class="bi bi-key me-1"></i>重置密码</button>

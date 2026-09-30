@@ -9,6 +9,11 @@
   var EASE_OUT = "cubic-bezier(.2, .8, .2, 1)";
   var EASE_IN_OUT = "cubic-bezier(.4, 0, .2, 1)";
   var EASE_SPRING = "cubic-bezier(.34, 1.56, .64, 1)";
+  var EASE_POP = "cubic-bezier(.3, 1.35, .5, 1)";
+  var EASE_EMPH = "cubic-bezier(.32, .72, 0, 1)";
+  var byPointer = false;
+  var island = null;
+  var warm = null;
   var reduceMotion = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 
   function calm() {
@@ -145,10 +150,16 @@
     });
   }
 
-  function render(html) {
+  function parsePage(html) {
     var doc = new DOMParser().parseFromString(html, "text/html");
     doc.querySelectorAll("script").forEach(function (s) { s.parentNode.removeChild(s); });
+    return doc;
+  }
+
+  function render(page) {
+    var doc = typeof page === "string" ? parsePage(page) : page;
     closeOverlays();
+    island = null;
     document.title = doc.title;
     var body = document.body;
     Array.prototype.slice.call(body.attributes).forEach(function (a) { body.removeAttribute(a.name); });
@@ -173,12 +184,89 @@
     if (auto) auto.focus({ preventScroll: true });
   }
 
-  function enterPage() {
+  function depthOf(p) {
+    if (p === "/login") return -1;
+    if (p === "/" || p === "/projects") return 0;
+    if (p === "/requirements/new" || /^\/requirements\/\d+\/edit$/.test(p)) return 3;
+    if (/^\/requirements\/\d+$/.test(p)) return 2;
+    return 1;
+  }
+
+  function direction(from, to) {
+    var a = depthOf(from);
+    var b = depthOf(to);
+    return b > a ? "forward" : b < a ? "back" : "fade";
+  }
+
+  function enterPage(dir) {
     var area = document.querySelector(".editor-area");
     var el = area ? area.firstElementChild : null;
     if (!el || typeof el.animate !== "function") return;
-    if (calm()) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "ease" });
-    else el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: EASE_OUT });
+    var dx = dir === "forward" ? 16 : dir === "back" ? -16 : 0;
+    if (calm() || !dx) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 120 : 200, easing: "ease" });
+    else el.animate([{ opacity: 0, transform: "translateX(" + dx + "px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: EASE_OUT });
+  }
+
+  function canMorphPage() {
+    return typeof document.startViewTransition === "function" && !calm() && document.visibilityState === "visible";
+  }
+
+  function heroLink(path) {
+    var p = CSS.escape(path);
+    return document.querySelector('.repo-name[data-href="' + p + '"], [data-req] > h5 > a[data-href="' + p + '"]');
+  }
+
+  function heroOk(el) {
+    if (!el) return false;
+    var rs = el.getClientRects();
+    if (rs.length !== 1) return false;
+    var r = rs[0];
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+  }
+
+  var vtSeq = 0;
+
+  function heroCard(hero, deeper) {
+    if (!hero) return null;
+    return deeper ? hero.closest(".page-main") : hero.closest(".repo-card, [data-req]");
+  }
+
+  function pageTransition(dir, from, to, carry, update) {
+    var deeper = dir === "forward";
+    var mode = dir;
+    var oldHero = deeper ? heroLink(to) : dir === "back" ? document.querySelector(".page-hero") : null;
+    var oldCard = heroCard(oldHero, !deeper);
+    if (!heroOk(oldHero) || !oldCard) {
+      oldHero = null;
+      oldCard = null;
+    }
+    if (oldHero) {
+      oldHero.style.viewTransitionName = "hub-hero";
+      oldCard.style.viewTransitionName = "hub-card";
+      mode = deeper ? "card-in" : "card-out";
+    }
+    if (carry) {
+      carry.content.style.viewTransitionName = "hub-island";
+      if (carry.shade) carry.shade.style.viewTransitionName = "hub-shade";
+    }
+    var tok = ++vtSeq;
+    root.setAttribute("data-vt", mode);
+    var named = [];
+    var vt = document.startViewTransition(function () {
+      update();
+      if (!oldHero) return;
+      var hero = deeper ? document.querySelector(".page-hero") : heroLink(from);
+      var card = heroCard(hero, deeper);
+      if (!heroOk(hero) || !card) return;
+      hero.style.viewTransitionName = "hub-hero";
+      card.style.viewTransitionName = "hub-card";
+      named = [hero, card];
+    });
+    var done = function () {
+      named.forEach(function (el) { el.style.viewTransitionName = ""; });
+      if (tok === vtSeq) root.removeAttribute("data-vt");
+    };
+    vt.finished.then(done, done);
   }
 
   function releaseForm(form) {
@@ -201,18 +289,23 @@
     var loadingTimer = window.setTimeout(function () { root.classList.add("hub-loading"); }, 120);
     var hops = 0;
     var hash = "";
+    if (opts.method && opts.method !== "GET") warm = null;
 
     function step(target, method, body) {
       var parts = splitHash(target);
       hash = parts[1];
-      return fetch(parts[0], {
-        method: method,
-        body: body,
-        headers: { "X-Hub-Nav": "1" },
-        credentials: "same-origin",
-        cache: "no-store",
-        signal: ctrl ? ctrl.signal : undefined
-      }).then(function (res) {
+      var send = function () {
+        return fetch(parts[0], {
+          method: method,
+          body: body,
+          headers: { "X-Hub-Nav": "1" },
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: ctrl ? ctrl.signal : undefined
+        });
+      };
+      var early = method === "GET" && hops === 0 ? takeWarm(parts[0]) : null;
+      return (early ? early.catch(send) : send()).then(function (res) {
         var loc = res.headers.get("X-Hub-Location");
         if (loc && isInternal(loc) && hops < 5) {
           hops++;
@@ -240,10 +333,14 @@
         window.location.assign(r.path);
         return;
       }
+      if (opts.islandFrom && openIsland(r.html, opts.islandFrom)) return;
+      if (opts.island && r.method !== "GET" && fillIsland(r.html)) return;
+      var carry = opts.island && island ? island : null;
       rememberScroll();
       var keepY = window.scrollY;
       var mode = "top";
-      var from = cur ? pathOnly(cur.path) : "";
+      var was = cur ? cur.path : "";
+      var from = pathOnly(was);
       var to = opts.pop ? opts.pop.path : r.method === "GET" ? r.path : null;
       var moved = to !== null && pathOnly(to) !== from;
       if (opts.pop) {
@@ -257,16 +354,39 @@
         if (same) mode = opts.form ? "keep" : "top";
         else if (typeof opts.scroll === "number") mode = opts.scroll;
       }
+      var dir = moved ? direction(from, pathOnly(to)) : "";
+      if (moved && canMorphPage()) {
+        var doc = parsePage(r.html);
+        pageTransition(dir, from, pathOnly(to), carry, function () {
+          if (carry) releaseIsland();
+          render(doc);
+          settle(mode, hash, keepY);
+        });
+        return;
+      }
+      var ghost = carry ? releaseIsland() : null;
+      var segs = moved ? null : segSnapshot();
+      var lives = moved ? null : liveSnapshot();
+      var page0 = moved ? null : listPage();
       render(r.html);
       settle(mode, hash, keepY);
-      if (moved) enterPage();
+      if (moved) {
+        enterPage(dir);
+      } else {
+        var dirs = segReplay(segs);
+        livePop(lives);
+        if (was && cur && cur.path !== was) listIn(dirs.tabs || 0, page0);
+      }
+      if (ghost) ghostOut(ghost);
     }).catch(function (err) {
       if (seq !== navSeq || (err && err.name === "AbortError")) return;
       releaseForm(opts.form);
       toast("网络出错了，请稍后再试");
     }).then(function () {
       window.clearTimeout(loadingTimer);
-      if (seq === navSeq) root.classList.remove("hub-loading");
+      if (seq !== navSeq) return;
+      root.classList.remove("hub-loading");
+      segRevert();
     });
   }
 
@@ -380,7 +500,9 @@
     var data = new FormData(form);
     if ((form.getAttribute("method") || "get").toLowerCase() === "post") {
       var multipart = (form.getAttribute("enctype") || "").toLowerCase() === "multipart/form-data";
-      navigate(action, { method: "POST", body: multipart ? data : new URLSearchParams(data), form: form });
+      var sub = event.submitter;
+      if (sub && sub.closest("[data-seg]")) segPress(sub);
+      navigate(action, { method: "POST", body: multipart ? data : new URLSearchParams(data), form: form, island: !!island && island.el.contains(form) });
     } else {
       var q = new URLSearchParams(data).toString();
       navigate(splitHash(action)[0].split("?")[0] + (q ? "?" + q : ""), { form: form });
@@ -407,8 +529,15 @@
     if (!href) return;
     if (newTab) window.open(href, "_blank", "noopener");
     else if (isDownload(href)) window.location.assign(href);
+    else if (island && island.el.contains(a) && a.hasAttribute("data-island-cancel")) closeIsland(false);
+    else if (a.hasAttribute("data-island") && window.bootstrap) {
+      if (!island) navigate(href, { islandFrom: a });
+    }
     else if (a.classList.contains("back-link") || a.hasAttribute("data-back")) backTo(href);
-    else navigate(href);
+    else {
+      if (a.closest("[data-seg]")) segPress(a);
+      navigate(href);
+    }
   }
 
   document.addEventListener("click", function (event) {
@@ -581,6 +710,7 @@
       if (!ok) toast("折叠状态没保存上，请稍后再试");
       else if (btn.dataset.dirty === "1") saveFold(btn);
     };
+    warm = null;
     fetch(btn.getAttribute("data-comment-fold") || btn.getAttribute("data-items-fold"), {
       method: "POST",
       body: data,
@@ -1219,6 +1349,7 @@
       input.dataset.saved = want ? "1" : "0";
       if (input.dataset.dirty === "1" && input.checked !== want) saveItem(input);
     };
+    warm = null;
     fetch(input.getAttribute("data-item-toggle"), {
       method: "POST",
       body: data,
@@ -1234,6 +1365,529 @@
     markItem(t);
     saveItem(t);
   });
+
+  var WARM_MS = 8000;
+
+  function warmUp(href) {
+    href = splitHash(href)[0];
+    if (warm && warm.href === href && Date.now() - warm.at < WARM_MS) return;
+    var res = fetch(href, { headers: { "X-Hub-Nav": "1" }, credentials: "same-origin", cache: "no-store" });
+    res.catch(function () { });
+    warm = { href: href, at: Date.now(), res: res };
+  }
+
+  function takeWarm(href) {
+    var w = warm;
+    if (!w || w.href !== href || Date.now() - w.at > WARM_MS) return null;
+    warm = null;
+    return w.res;
+  }
+
+  function prefetchable(a) {
+    var href = a.getAttribute("data-href");
+    if (!href || island || !isInternal(href) || isDownload(href) || a.hasAttribute("data-island-cancel")) return false;
+    return !cur || splitHash(href)[0] !== cur.path;
+  }
+
+  var hoverTimer = 0;
+  var hoverLink = null;
+
+  document.addEventListener("pointerover", function (event) {
+    if (event.pointerType !== "mouse") return;
+    var a = event.target instanceof Element ? event.target.closest("a[data-href]") : null;
+    if (a === hoverLink) return;
+    hoverLink = a;
+    window.clearTimeout(hoverTimer);
+    if (!a || !prefetchable(a)) return;
+    hoverTimer = window.setTimeout(function () {
+      if (hoverLink === a && a.isConnected && prefetchable(a)) warmUp(a.getAttribute("data-href"));
+    }, 70);
+  }, { passive: true });
+
+  document.addEventListener("pointerdown", function (event) {
+    if (event.button !== 0) return;
+    var a = event.target instanceof Element ? event.target.closest("a[data-href]") : null;
+    if (a && prefetchable(a)) warmUp(a.getAttribute("data-href"));
+  }, true);
+
+  function flip(a, b) {
+    return "translate(" + (a.left - b.left) + "px, " + (a.top - b.top) + "px) scale(" + Math.max(a.width / b.width, 0.01) + ", " + Math.max(a.height / b.height, 0.01) + ")";
+  }
+
+  function shrunk(r, k) {
+    var w = r.width * k;
+    var h = r.height * k;
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
+  }
+
+  function originRect(el) {
+    if (!el || !el.isConnected) return null;
+    var r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > window.innerHeight) return null;
+    return r;
+  }
+
+  function islandParts(it) {
+    return Array.prototype.filter.call(it.content.children, function (c) { return c.tagName !== "INPUT"; });
+  }
+
+  var segRun = null;
+
+  function near(a, b) {
+    return Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1;
+  }
+
+  function segBox(group, el) {
+    var g = group.getBoundingClientRect();
+    var r = el.getBoundingClientRect();
+    if (r.width < 1 || g.width < 1) return null;
+    return { left: r.left - g.left, top: r.top - g.top, width: r.width, height: r.height, radius: getComputedStyle(el).borderRadius };
+  }
+
+  function segNow(group) {
+    var run = segRun;
+    if (run && run.group === group) {
+      var t = run.anims[0].effect.getComputedTiming();
+      var p = t.progress === null ? 1 : t.progress;
+      var mix = function (k) { return run.from[k] + (run.to[k] - run.from[k]) * p; };
+      return { left: mix("left"), top: mix("top"), width: mix("width"), height: mix("height"), radius: p < 0.5 ? run.from.radius : run.to.radius };
+    }
+    var on = group.querySelector("[aria-current]");
+    return on ? segBox(group, on) : null;
+  }
+
+  function segClear(run) {
+    run.anims.forEach(function (a) { a.cancel(); });
+    var g = run.group;
+    g.classList.remove("is-seg-moving", "is-seg-press");
+    if (run.target) run.target.classList.remove("is-seg-target");
+    ["--seg-x", "--seg-y", "--seg-w", "--seg-h", "--seg-r"].forEach(function (k) { g.style.removeProperty(k); });
+    if (!g.getAttribute("style")) g.removeAttribute("style");
+    if (segRun === run) segRun = null;
+  }
+
+  function segSlide(group, from, to, opts) {
+    if (segRun) segClear(segRun);
+    group.style.setProperty("--seg-x", to.left + "px");
+    group.style.setProperty("--seg-y", to.top + "px");
+    group.style.setProperty("--seg-w", to.width + "px");
+    group.style.setProperty("--seg-h", to.height + "px");
+    group.style.setProperty("--seg-r", to.radius);
+    group.classList.add("is-seg-moving");
+    var keys = [{ transform: flip(from, to), borderRadius: from.radius }, { transform: "none", borderRadius: to.radius }];
+    var timing = { duration: opts.duration, easing: opts.easing };
+    var anims = ["::before", "::after"].map(function (pe) {
+      return group.animate(keys, { duration: timing.duration, easing: timing.easing, pseudoElement: pe });
+    });
+    var run = { group: group, from: from, to: to, anims: anims, at: performance.now(), duration: opts.duration, hold: !!opts.hold, back: opts.back || null, dir: opts.dir || 0, target: opts.target || null };
+    if (run.target) {
+      run.target.classList.add("is-seg-target");
+      group.classList.add("is-seg-press");
+    }
+    segRun = run;
+    anims[0].finished.then(function () {
+      if (segRun === run && !run.hold) segClear(run);
+    }, function () { });
+    return run;
+  }
+
+  function segPress(el) {
+    var group = el.closest("[data-seg]");
+    if (!group || calm() || typeof group.animate !== "function") return;
+    var from = segNow(group);
+    var to = segBox(group, el);
+    if (!from || !to || near(from, to)) return;
+    var back = segRun && segRun.group === group && segRun.back ? segRun.back : group.querySelector("[aria-current]");
+    segSlide(group, from, to, { duration: 380, easing: EASE_POP, hold: true, back: back, dir: to.left > from.left ? 1 : -1, target: el });
+  }
+
+  function segRevert() {
+    var run = segRun;
+    if (!run || !run.hold || !run.group.isConnected) return;
+    var from = segNow(run.group);
+    var to = run.back ? segBox(run.group, run.back) : null;
+    if (!from || !to) {
+      segClear(run);
+      return;
+    }
+    segSlide(run.group, from, to, { duration: 260, easing: EASE_EMPH });
+  }
+
+  function segSnapshot() {
+    var out = {};
+    document.querySelectorAll("[data-seg]").forEach(function (g) {
+      var box = segNow(g);
+      if (!box) return;
+      var run = segRun && segRun.group === g ? segRun : null;
+      out[g.getAttribute("data-seg")] = { box: box, left: run ? Math.max(0, run.duration - (performance.now() - run.at)) : 0, dir: run ? run.dir : 0 };
+    });
+    if (segRun && !segRun.group.isConnected) segRun = null;
+    return out;
+  }
+
+  function segReplay(snap) {
+    var dirs = {};
+    if (segRun && !segRun.group.isConnected) segRun = null;
+    document.querySelectorAll("[data-seg]").forEach(function (g) {
+      var key = g.getAttribute("data-seg");
+      var s = snap[key];
+      var on = g.querySelector("[aria-current]");
+      var to = s && on ? segBox(g, on) : null;
+      if (!to) return;
+      var moved = to.left - s.box.left;
+      dirs[key] = s.dir || (moved > 1 ? 1 : moved < -1 ? -1 : 0);
+      if (near(s.box, to) || calm() || typeof g.animate !== "function") return;
+      if (s.left > 0) segSlide(g, s.box, to, { duration: Math.max(160, s.left), easing: EASE_OUT });
+      else segSlide(g, s.box, to, { duration: 380, easing: EASE_POP });
+    });
+    return dirs;
+  }
+
+  function listPage() {
+    var body = document.querySelector("[data-list-body]");
+    return body ? parseInt(body.getAttribute("data-page"), 10) || 1 : null;
+  }
+
+  function listIn(dir, before) {
+    var body = document.querySelector("[data-list-body]");
+    if (!body || typeof body.animate !== "function") return;
+    if (!dir && before !== null) {
+      var now = listPage();
+      dir = now > before ? 1 : now < before ? -1 : 0;
+    }
+    if (calm()) {
+      body.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease" });
+      return;
+    }
+    var start = dir ? "translateX(" + (dir * 18) + "px)" : "translateY(6px)";
+    body.animate([{ opacity: 0, transform: start }, { opacity: 1, transform: "none" }], { duration: 320, easing: EASE_EMPH });
+  }
+
+  function liveSnapshot() {
+    var out = {};
+    document.querySelectorAll("[data-live]").forEach(function (el) { out[el.getAttribute("data-live")] = el.textContent; });
+    return out;
+  }
+
+  function livePop(snap) {
+    document.querySelectorAll("[data-live]").forEach(function (el) {
+      var key = el.getAttribute("data-live");
+      if (!(key in snap) || snap[key] === el.textContent || typeof el.animate !== "function") return;
+      if (calm()) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease" });
+      else el.animate([{ opacity: 0, transform: "scale(.8)" }, { opacity: 1, transform: "none" }], { duration: 420, easing: EASE_POP });
+    });
+  }
+
+  function originKey(el) {
+    if (!el) return null;
+    if (el.hasAttribute("data-island-modal")) return '[data-island-modal="' + CSS.escape(el.getAttribute("data-island-modal")) + '"]';
+    if (el.hasAttribute("data-href")) return 'a[data-island][data-href="' + CSS.escape(el.getAttribute("data-href")) + '"]';
+    return null;
+  }
+
+  document.addEventListener("pointerdown", function () { byPointer = true; }, true);
+  document.addEventListener("keydown", function (event) {
+    byPointer = false;
+    var q = document.querySelector("[data-quiet-focus]");
+    if (q && event.key !== "Shift") q.removeAttribute("data-quiet-focus");
+  }, true);
+  document.addEventListener("focusout", function (event) {
+    var t = event.target;
+    if (t instanceof Element && t.hasAttribute("data-quiet-focus")) t.removeAttribute("data-quiet-focus");
+  }, true);
+
+  function giveFocus(el) {
+    if (!el || !el.isConnected || el.offsetParent === null) return;
+    if (byPointer) el.setAttribute("data-quiet-focus", "");
+    el.focus({ preventScroll: true });
+  }
+
+  function hideOrigin(el) {
+    if (!el || typeof el.animate !== "function" || el.closest(".modal")) return null;
+    return { el: el, anim: el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: "ease-out", fill: "forwards" }) };
+  }
+
+  function showOrigin(hid) {
+    if (hid) hid.anim.cancel();
+  }
+
+  function playIsland(it, anims, done) {
+    var token = {};
+    it.anims = anims;
+    it.token = token;
+    Promise.all(anims.map(function (a) { return a.finished; })).then(function () {
+      if (it.token === token) done();
+    }, function () { });
+  }
+
+  function stopIsland(it) {
+    var anims = it.anims || [];
+    it.anims = null;
+    it.token = null;
+    anims.forEach(function (a) { a.cancel(); });
+    it.el.classList.remove("is-morphing");
+  }
+
+  function islandIn(it, keepShade) {
+    var shade = keepShade ? null : it.shade;
+    var parts = islandParts(it);
+    if (typeof it.content.animate !== "function") return;
+    if (calm()) {
+      var quick = { duration: 150, easing: "ease" };
+      var soft = [it.content.animate([{ opacity: 0 }, { opacity: 1 }], quick)];
+      if (shade) soft.push(shade.animate([{ opacity: 0 }, {}], quick));
+      playIsland(it, soft, function () { it.anims = null; });
+      return;
+    }
+    var to = it.content.getBoundingClientRect();
+    var from = it.rect || originRect(it.origin);
+    var anims = [];
+    it.el.classList.add("is-morphing");
+    if (shade) anims.push(shade.animate([{ opacity: 0 }, {}], { duration: 320, easing: "ease" }));
+    if (from) {
+      if (!it.hide && !it.rect) it.hide = hideOrigin(it.origin);
+      anims.push(it.content.animate([{ transform: flip(from, to) }, { transform: "none" }], { duration: 520, easing: EASE_POP }));
+      anims.push(it.content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 110, easing: "ease" }));
+    } else {
+      anims.push(it.content.animate([{ transform: flip(shrunk(to, 0.94), to), opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 360, easing: EASE_POP }));
+    }
+    parts.forEach(function (p) {
+      anims.push(p.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 140, easing: "ease", fill: "backwards" }));
+    });
+    playIsland(it, anims, function () {
+      it.anims = null;
+      it.el.classList.remove("is-morphing");
+    });
+  }
+
+  function islandOut(it, target, shade, done) {
+    var content = it.content;
+    var parts = islandParts(it);
+    var fromT = getComputedStyle(content).transform;
+    var fromO = getComputedStyle(content).opacity;
+    var fromS = shade ? getComputedStyle(shade).opacity : null;
+    var partO = parts.map(function (p) { return getComputedStyle(p).opacity; });
+    var hid = it.hide;
+    it.hide = null;
+    stopIsland(it);
+    if (typeof content.animate !== "function") {
+      showOrigin(hid);
+      done();
+      return;
+    }
+    var anims = [];
+    if (calm()) {
+      showOrigin(hid);
+      var quick = { duration: 150, easing: "ease", fill: "forwards" };
+      anims.push(content.animate([{ opacity: fromO }, { opacity: 0 }], quick));
+      if (shade) anims.push(shade.animate([{ opacity: fromS }, { opacity: 0 }], quick));
+      playIsland(it, anims, done);
+      return;
+    }
+    var box = content.getBoundingClientRect();
+    var to = originRect(target);
+    it.el.classList.add("is-morphing");
+    if (shade) anims.push(shade.animate([{ opacity: fromS }, { opacity: 0 }], { duration: 280, easing: "ease", fill: "forwards" }));
+    parts.forEach(function (p, i) {
+      anims.push(p.animate([{ opacity: partO[i] }, { opacity: 0 }], { duration: 100, easing: "ease-out", fill: "forwards" }));
+    });
+    if (to) {
+      var land = target.closest(".modal") ? null : target;
+      showOrigin(hid);
+      anims.push(content.animate([{ transform: fromT === "none" ? "none" : fromT }, { transform: flip(to, box) }], { duration: 300, easing: EASE_EMPH, fill: "forwards" }));
+      anims.push(content.animate([{ opacity: fromO }, { opacity: 0 }], { duration: 130, delay: 160, easing: "ease-in", fill: "both" }));
+      if (land) anims.push(land.animate([{ opacity: 0 }, { opacity: 0, offset: 0.53 }, { opacity: 1 }], { duration: 300, easing: "linear" }));
+    } else {
+      showOrigin(hid);
+      anims.push(content.animate([{ transform: fromT === "none" ? "none" : fromT, opacity: fromO }, { transform: flip(shrunk(box, 0.96), box), opacity: 0 }], { duration: 180, easing: EASE_OUT, fill: "forwards" }));
+    }
+    playIsland(it, anims, done);
+  }
+
+  function openIsland(html, origin) {
+    if (!window.bootstrap || island) return false;
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var src = doc.querySelector("[data-island-body]");
+    var form = src ? src.querySelector("form") : null;
+    if (!form) return false;
+    var el = document.createElement("div");
+    el.className = "modal hub-island";
+    el.tabIndex = -1;
+    el.setAttribute("aria-labelledby", "hubIslandTitle");
+    var dialog = document.createElement("div");
+    dialog.className = "modal-dialog modal-dialog-centered modal-dialog-scrollable";
+    var content = document.createElement("div");
+    content.className = "modal-content";
+    var head = document.createElement("div");
+    head.className = "modal-header";
+    var title = document.createElement("h2");
+    title.className = "modal-title";
+    title.id = "hubIslandTitle";
+    title.textContent = src.getAttribute("data-island-title") || "";
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "btn-close";
+    close.setAttribute("aria-label", "关闭");
+    close.setAttribute("data-island-close", "");
+    head.appendChild(title);
+    head.appendChild(close);
+    content.appendChild(head);
+    content.appendChild(document.importNode(form, true));
+    dialog.appendChild(content);
+    el.appendChild(dialog);
+    el.classList.add("hub-island-wide");
+    document.body.appendChild(el);
+    init();
+    showIsland(el, origin, { owned: true });
+    return true;
+  }
+
+  function showIsland(el, origin, opts) {
+    el.classList.add("hub-island");
+    var content = el.querySelector(".modal-content");
+    var inst = window.bootstrap.Modal.getOrCreateInstance(el, { backdrop: "static", keyboard: false });
+    var it = { el: el, content: content, inst: inst, origin: origin, rect: opts.rect || null, owned: !!opts.owned, returnTo: opts.returnTo || origin, key: originKey(opts.returnTo || origin), dirty: false, shade: null, hide: opts.hide || null };
+    it.onPrevent = function (event) {
+      event.preventDefault();
+      closeIsland(false);
+    };
+    el.addEventListener("hidePrevented.bs.modal", it.onPrevent);
+    island = it;
+    inst.show();
+    var shades = document.querySelectorAll(".modal-backdrop");
+    it.shade = shades.length ? shades[shades.length - 1] : null;
+    var first = content.querySelector("[autofocus]");
+    if (!first) {
+      first = Array.prototype.filter.call(content.querySelectorAll('input[type="text"], input:not([type])'), function (f) {
+        return !f.value && f.offsetParent !== null;
+      })[0] || null;
+    }
+    if (first) first.focus({ preventScroll: true });
+    islandIn(it, !!opts.keepShade);
+    return it;
+  }
+
+  function unmountIsland(it) {
+    stopIsland(it);
+    it.el.removeEventListener("hidePrevented.bs.modal", it.onPrevent);
+    it.inst.hide();
+    it.inst.dispose();
+    if (it.owned) {
+      it.el.parentNode.removeChild(it.el);
+    } else if (it.dirty) {
+      var f = it.el.querySelector("form");
+      if (f) {
+        f.reset();
+        f.querySelectorAll("input[data-confirm-name]").forEach(syncConfirmName);
+      }
+    }
+  }
+
+  function openModalIsland(el, trigger) {
+    if (!el || !window.bootstrap) return;
+    var prev = island;
+    var opts = { owned: false };
+    if (prev) {
+      if (prev.closing || prev.el === el) return;
+      opts.rect = originRect(trigger);
+      opts.keepShade = true;
+      opts.returnTo = prev.returnTo;
+      opts.hide = prev.hide;
+      prev.hide = null;
+      island = null;
+      unmountIsland(prev);
+    }
+    showIsland(el, trigger, opts);
+  }
+
+  function fillIsland(html) {
+    var it = island;
+    if (!it) return false;
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var src = doc.querySelector("[data-island-body] form");
+    var old = it.content.querySelector("form");
+    if (!src || !old) return false;
+    var fresh = document.importNode(src, true);
+    morph(it.content, function () {
+      old.parentNode.replaceChild(fresh, old);
+      init();
+    }, null);
+    it.dirty = true;
+    var bad = fresh.querySelector("[autofocus]");
+    if (bad) bad.focus();
+    return true;
+  }
+
+  function closeIsland(force) {
+    var it = island;
+    if (!it || it.closing) return;
+    if (!force && it.dirty && !window.confirm("放弃还没保存的修改？")) return;
+    it.closing = true;
+    islandOut(it, originRect(it.origin) ? it.origin : it.returnTo, it.shade, function () {
+      if (island !== it || !it.el.isConnected) return;
+      island = null;
+      unmountIsland(it);
+      giveFocus(it.returnTo);
+    });
+  }
+
+  function releaseIsland() {
+    var it = island;
+    if (!it) return null;
+    island = null;
+    stopIsland(it);
+    it.inst.dispose();
+    return it;
+  }
+
+  function ghostOut(it) {
+    var el = it.el;
+    el.classList.add("hub-island-ghost");
+    el.setAttribute("inert", "");
+    el.setAttribute("aria-hidden", "true");
+    var shade = document.createElement("div");
+    shade.className = "modal-backdrop show hub-island-ghost";
+    document.body.appendChild(shade);
+    document.body.appendChild(el);
+    var target = it.key ? document.querySelector(it.key) : null;
+    islandOut(it, target, shade, function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+      if (shade.parentNode) shade.parentNode.removeChild(shade);
+    });
+  }
+
+  document.addEventListener("input", function (event) {
+    if (island && island.el.contains(event.target)) island.dirty = true;
+  }, true);
+
+  document.addEventListener("change", function (event) {
+    if (island && island.el.contains(event.target)) island.dirty = true;
+  }, true);
+
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (!(t instanceof Element)) return;
+    var trigger = t.closest("[data-island-modal]");
+    if (trigger) {
+      event.preventDefault();
+      openModalIsland(document.querySelector(trigger.getAttribute("data-island-modal")), trigger);
+      return;
+    }
+    if (!island || !island.el.contains(t)) return;
+    if (t.closest('[data-island-close], [data-bs-dismiss="modal"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeIsland(false);
+      return;
+    }
+    if (t.closest("[data-att-drop]")) island.dirty = true;
+    var del = t.closest("[data-item-del]");
+    var row = del ? itemRowOf(del) : null;
+    if (row) {
+      var input = itemInput(row);
+      if ((input && input.value.trim() !== "") || rowHasFiles(row)) island.dirty = true;
+    }
+  }, true);
 
   function autoHide(el) {
     var ms = parseInt(el.getAttribute("data-autohide"), 10);

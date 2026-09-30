@@ -69,7 +69,7 @@ fun queryGroup(items: List<Pair<String, String>>, current: String?, href: (Strin
     val currentMore = more.firstOrNull { it.first == current }
 
     val desktop = buildString {
-        append("""<div class="btn-group btn-group-sm md-show" role="group">""")
+        append("""<div class="btn-group btn-group-sm md-show" role="group" data-seg="tabs">""")
         shown.forEach { (key, label) ->
             val on = key == current
             append("""<a class="btn btn-outline-secondary text-nowrap${if (on) " active" else ""}" href="${e(href(key))}"${if (on) " aria-current=\"page\"" else ""}>$label</a>""")
@@ -246,7 +246,7 @@ private fun statusBar(ctx: Context, user: User, active: String): String {
     else "<div></div>"
     val logout = """<form method="post" action="/logout" class="sb-logout">${csrfInput(ctx)}<button class="sb-icon" type="submit" aria-label="退出登录"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></button></form>"""
     return """
-<footer id="statusBar" class="status-bar" aria-label="状态栏">
+<footer id="statusBar" class="status-bar is-fixed" aria-label="状态栏">
   <div class="d-flex align-items-stretch justify-content-between h-100">$left$logout</div>
 </footer>"""
 }

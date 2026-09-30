@@ -47,7 +47,7 @@ $mark"""
         val canManage = user.isAdmin && !view.readOnly
         if (versions.isEmpty() && !canManage) return ""
         val action = if (!canManage) "" else
-            """<button class="dl-add" type="button" data-bs-toggle="modal" data-bs-target="#uploadVersion"><i class="bi bi-upload" aria-hidden="true"></i>上传新版本</button>"""
+            """<button class="dl-add" type="button" data-island-modal="#uploadVersion"><i class="bi bi-upload" aria-hidden="true"></i>上传新版本</button>"""
         val body = if (versions.isEmpty()) """<p class="dl-empty">还没有上传版本</p>""" else buildString {
             append(block(ctx, versions[0], true, canManage))
             val older = versions.drop(1)

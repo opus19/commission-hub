@@ -91,6 +91,7 @@ object RequirementHandlers {
   ${csrfInput(ctx)}
   $projectField
   $removedFields
+  <div class="req-form-fields">
   <div class="mb-3">
     <label class="form-label" for="f_title">标题 <span class="text-danger">*</span></label>
     <input class="${cls("title")}" id="f_title" type="text" name="title" value="${e(f.title)}" placeholder="一句话说清要做什么" maxlength="200" autocomplete="off"${state("title", "f_title")}>
@@ -107,24 +108,24 @@ object RequirementHandlers {
       </div>
     </div>
   </div>
-  <div class="d-flex align-items-center mt-2">
+  </div>
+  <div class="req-form-actions d-flex align-items-center mt-2">
     <button class="btn btn-primary me-2" type="submit">${e(submit)}</button>
-    <a class="btn btn-link link-secondary" href="${e(cancelHref)}">取消</a>
+    <a class="btn btn-link link-secondary" href="${e(cancelHref)}" data-island-cancel>取消</a>
   </div>
 </form>"""
     }
 
+    private fun islandBody(title: String, form: String): String =
+        """<h3 class="mb-4">${e(title)}</h3><div data-island-body data-island-title="${e(title)}">$form</div>"""
+
     private fun renderNew(ctx: Context, project: Project, f: ReqForm, errors: Map<String, String>) {
-        val main = """
-<h3 class="mb-4">新建需求</h3>
-""" + form(ctx, "/requirements", "创建需求", "/projects/${project.id}", f, project.id, errors, emptyList())
+        val main = islandBody("新建需求", form(ctx, "/requirements", "创建需求", "/projects/${project.id}", f, project.id, errors, emptyList()))
         ctx.html(page(ctx, "新建需求", "projects", main, back = "/projects/${project.id}" to project.name))
     }
 
     private fun renderEdit(ctx: Context, r: Requirement, f: ReqForm, errors: Map<String, String>, saved: List<Attachment>) {
-        val main = """
-<h3 class="mb-4">编辑需求</h3>
-""" + form(ctx, "/requirements/${r.id}", "保存修改", "/requirements/${r.id}", f, null, errors, saved)
+        val main = islandBody("编辑需求", form(ctx, "/requirements/${r.id}", "保存修改", "/requirements/${r.id}", f, null, errors, saved))
         ctx.html(page(ctx, "编辑需求", "projects", main, back = "/requirements/${r.id}" to r.title))
     }
 
@@ -254,13 +255,13 @@ object RequirementHandlers {
         val targets = Transitions.allowed(user, view)
 
         val edit = if (view.readOnly) "" else
-            """<a class="link-secondary req-edit" href="/requirements/${r.id}/edit" aria-label="编辑需求"><i class="bi bi-pencil" aria-hidden="true"></i>编辑</a>"""
+            """<a class="link-secondary req-edit" href="/requirements/${r.id}/edit" aria-label="编辑需求" data-island><i class="bi bi-pencil" aria-hidden="true"></i>编辑</a>"""
 
         val question = """
 <div>
   ${readOnlyBanner(view)}
   <div class="d-flex align-items-baseline gap-3 border-bottom pb-3 mb-4">
-    <h1 class="h3 mb-0 flex-grow-1 min-w-0 text-wrap text-break">${e(r.title)}</h1>
+    <h1 class="h3 mb-0 flex-grow-1 min-w-0 text-wrap text-break"><span class="page-hero">${e(r.title)}</span></h1>
     $edit
   </div>
   ${if (!user.isAdmin) clientActionBox(ctx, r, targets) else ""}
@@ -270,7 +271,7 @@ object RequirementHandlers {
         val main = question + CommentHandlers.section(ctx, user, view, comments)
 
         val info = buildList {
-            add("状态" to statusBadge(r.statusEnum))
+            add("状态" to """<span data-live="status">${statusBadge(r.statusEnum)}</span>""")
             add("优先级" to priorityBadge(r.priorityEnum))
             add("期望交付" to wantedBadge(r, full = true).ifEmpty { """<span class="text-secondary">未填</span>""" })
             add("创建" to e(formatStamp(r.createdAt)))
@@ -306,7 +307,7 @@ object RequirementHandlers {
                 """<form method="post" action="/requirements/${r.id}/status" class="status-step-cell">${csrfInput(ctx)}<input type="hidden" name="to" value="${s.code}"><button class="status-step" type="submit">${e(text)}</button></form>"""
             }
         }
-        val body = """<div class="status-steps" role="group" aria-label="推进状态">$buttons</div>"""
+        val body = """<div class="status-steps" role="group" aria-label="推进状态" data-seg="status">$buttons</div>"""
         return sideCard("推进状态", body)
     }
 

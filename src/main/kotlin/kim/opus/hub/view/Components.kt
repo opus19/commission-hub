@@ -38,8 +38,10 @@ fun listSection(l: ListSpec): String {
     return """
 $heading
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">${queryGroup(tabs, l.tab, l.tabHref, 4)}$orderMenu</div>
+<div data-list-body data-page="${l.result.page}">
 $list
 ${pagination(l.result.page, l.result.pages, l.pageHref)}
+</div>
 """
 }
 
@@ -60,7 +62,7 @@ fun modalForm(
     multipart: Boolean = false,
     size: String = ""
 ): String = """
-<div class="modal fade" id="${e(id)}" tabindex="-1" aria-labelledby="${e(id)}Label" aria-hidden="true">
+<div class="modal hub-island" id="${e(id)}" tabindex="-1" aria-labelledby="${e(id)}Label" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered $size">
     <form class="modal-content" method="post" action="${e(action)}"${if (multipart) """ enctype="multipart/form-data"""" else ""}>
       ${csrfInput(ctx)}

@@ -13,7 +13,7 @@ object ProjectHandlers {
         val all = ProjectRepo.views(if (user.isAdmin) null else user.id)
 
         val toolbar = if (!user.isAdmin) "" else
-            """<div class="d-flex mb-4"><button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#newProject"><i class="bi bi-plus-lg me-1"></i>新建项目</button></div>"""
+            """<div class="d-flex mb-4"><button class="btn btn-primary btn-sm" type="button" data-island-modal="#newProject"><i class="bi bi-plus-lg me-1"></i>新建项目</button></div>"""
 
         val grid = when {
             all.isNotEmpty() -> """<div class="row row-cols-1 row-cols-md-2 g-3">${all.joinToString("") { projectCard(it) }}</div>"""
@@ -70,7 +70,7 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
     <div class="danger-zone-title">删除项目</div>
     <div class="danger-zone-text">项目里的需求、补充信息、附件和版本会一起永久删除</div>
   </div>
-  <button class="btn btn-sm btn-outline-danger flex-shrink-0" type="button" data-bs-toggle="modal" data-bs-target="#deleteProject">删除项目</button>
+  <button class="btn btn-sm btn-outline-danger flex-shrink-0" type="button" data-island-modal="#deleteProject">删除项目</button>
 </div>""",
         "保存"
     )
@@ -78,7 +78,7 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
     private fun deleteProjectModal(ctx: Context, project: Project): String {
         val name = e(project.name)
         return """
-<div class="modal fade" id="deleteProject" tabindex="-1" aria-labelledby="deleteProjectLabel" aria-hidden="true">
+<div class="modal hub-island" id="deleteProject" tabindex="-1" aria-labelledby="deleteProjectLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content" method="post" action="/projects/${project.id}/delete">
       ${csrfInput(ctx)}
@@ -103,14 +103,14 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
 
     private fun header(ctx: Context, user: User, project: Project): String {
         val buttons = buildString {
-            append("""<a class="btn btn-primary btn-sm" href="/requirements/new?project=${project.id}"><i class="bi bi-plus-lg me-1"></i>新建需求</a>""")
-            if (user.isAdmin) append("""<button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#editProject"><i class="bi bi-pencil me-1"></i>编辑项目</button>""")
+            append("""<a class="btn btn-primary btn-sm" href="/requirements/new?project=${project.id}" data-island><i class="bi bi-plus-lg me-1"></i>新建需求</a>""")
+            if (user.isAdmin) append("""<button class="btn btn-outline-secondary btn-sm" type="button" data-island-modal="#editProject"><i class="bi bi-pencil me-1"></i>编辑项目</button>""")
         }
         val modals = if (user.isAdmin) editProjectModal(ctx, project) + deleteProjectModal(ctx, project) else ""
 
         return """
 <div class="mb-4">
-  <h3 class="mb-2 text-break">${e(project.name)}</h3>
+  <h3 class="mb-2 text-break"><span class="page-hero">${e(project.name)}</span></h3>
   <div class="small text-secondary">${createdTag(project.createdAt)}</div>
   <div class="d-flex flex-wrap gap-2 mt-3">$buttons</div>
 </div>
