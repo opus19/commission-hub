@@ -28,7 +28,7 @@ object CommentHandlers {
             recent.forEach { append(commentItem(ctx, user, view, it, it.id in folded)) }
             append("</div>")
         }
-        val tail = if (view.readOnly) "" else composer(ctx, r)
+        val tail = if (view.readOnly) "" else composer(ctx, user, r)
         return """
 <section class="thread mt-5" id="conversation" aria-labelledby="conversationTitle" data-csrf="${e(ctx.session().csrf)}">
   <h5 class="thread-title" id="conversationTitle">补充信息<span class="text-secondary fw-normal fs-6 ms-2">${visible.size} 条</span></h5>
@@ -90,18 +90,23 @@ $tail"""
         return """<span class="file-chip"><a class="file-chip-link" href="/attachments/${f.id}" title="$name"><i class="bi ${fileIcon(f.originalName)}"></i><span class="file-chip-name">$name</span><span class="file-chip-size">${e(formatSize(f.sizeBytes))}</span></a>$del</span>"""
     }
 
-    private fun composer(ctx: Context, r: Requirement): String = """
+    private fun toList(user: User, r: Requirement): String {
+        if (user.isAdmin) return ""
+        val hint = if (r.statusEnum == ReqStatus.TESTING) "加进需求清单，需求会退回待开发" else "加进需求清单"
+        return """<button class="btn btn-soft btn-sm" type="submit" formaction="/requirements/${r.id}/items" data-list-add data-max-text="${ItemHandlers.MAX_LENGTH}" data-too-long="${ItemHandlers.TOO_LONG}" title="$hint"><i class="bi bi-plus-lg me-1"></i>加入清单</button>"""
+    }
+
+    private fun composer(ctx: Context, user: User, r: Requirement): String = """
 <section class="reply" id="reply" aria-label="添加补充信息">
   <form class="composer" id="composer" method="post" action="/requirements/${r.id}/comments" enctype="multipart/form-data" data-composer>
     ${csrfInput(ctx)}
     <label class="visually-hidden" for="c_body">补充信息内容</label>
     <textarea class="form-control composer-input" id="c_body" name="body" rows="4" maxlength="20000"></textarea>
     <div class="composer-files" id="c_file_names" hidden></div>
-    <div class="composer-error" id="c_error" role="alert" hidden>写点什么，或者至少选一个附件</div>
     <div class="composer-bar">
       <input class="composer-file-input" id="c_files" type="file" name="files" multiple data-file-list="#c_file_names">
       <label class="composer-attach" for="c_files"><i class="bi bi-paperclip me-1"></i>添加附件</label>
-      <button class="btn btn-primary btn-sm ms-auto" type="submit"><i class="bi bi-send me-1"></i>发送</button>
+      <div class="composer-send">${toList(user, r)}<button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-send me-1"></i>发送</button></div>
     </div>
   </form>
 </section>"""

@@ -68,11 +68,9 @@ fun modalForm(
       ${csrfInput(ctx)}
       <div class="modal-header">
         <h5 class="modal-title" id="${e(id)}Label">${e(title)}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
       </div>
       <div class="modal-body">$body</div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">取消</button>
         <button type="submit" class="btn $submitClass">${e(submit)}</button>
       </div>
     </form>

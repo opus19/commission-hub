@@ -57,6 +57,7 @@ object Routes {
         post("/requirements/{id}/status") { ctx -> RequirementHandlers.changeStatus(ctx) }
         post("/requirements/{id}/comments") { ctx -> CommentHandlers.create(ctx) }
         post("/requirements/{id}/versions") { ctx -> VersionHandlers.upload(ctx) }
+        post("/requirements/{id}/items") { ctx -> ItemHandlers.add(ctx) }
         post("/requirements/{id}/items/fold") { ctx -> ItemHandlers.fold(ctx) }
         post("/comments/{id}") { ctx -> CommentHandlers.update(ctx) }
         post("/comments/{id}/delete") { ctx -> CommentHandlers.delete(ctx) }

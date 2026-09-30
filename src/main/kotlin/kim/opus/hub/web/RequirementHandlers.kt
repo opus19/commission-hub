@@ -229,13 +229,11 @@ object RequirementHandlers {
       <input type="hidden" name="to" value="${ReqStatus.ARCHIVED.code}">
       <div class="modal-header">
         <h5 class="modal-title" id="acceptReqLabel">输入需求标题 <strong class="text-break">$title</strong> 确认验收</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
       </div>
       <div class="modal-body">
         <input class="form-control" id="ar_title" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$title" aria-labelledby="acceptReqLabel">
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">取消</button>
         <button type="submit" class="btn btn-success" disabled>验收通过</button>
       </div>
     </form>

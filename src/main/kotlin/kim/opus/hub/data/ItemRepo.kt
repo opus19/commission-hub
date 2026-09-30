@@ -48,6 +48,29 @@ object ItemRepo {
         return Saved(ids, dropped)
     }
 
+    fun count(requirementId: Long): Long = Db.read { it.count("select count(*) from req_items where requirement_id = ?", requirementId) }
+
+    class Added(val id: Long, val reopened: Boolean)
+
+    fun append(requirementId: Long, body: String, files: List<NewFile>, actor: Long): Added = Db.tx { c ->
+        val stamp = nowIso()
+        val position = c.count("select coalesce(max(position), -1) + 1 from req_items where requirement_id = ?", requirementId).toInt()
+        val id = c.insert(
+            "insert into req_items(requirement_id, position, body, created_at) values(?, ?, ?, ?)",
+            requirementId, position, body, stamp
+        )
+        AttachmentRepo.add(c, requirementId, id, actor, files, stamp)
+        Audit.add(c, actor, "requirement", requirementId, "item_added", body.take(200))
+        val reopened = c.exec(
+            "update requirements set status = 'todo', closed_at = null, updated_at = ? where id = ? and status = 'testing'",
+            stamp, requirementId
+        ) > 0
+        if (reopened) Audit.add(c, actor, "requirement", requirementId, "status", "待测试 → 待开发：客户加入清单项")
+        else ReqRepo.touch(c, requirementId)
+        c.exec("delete from item_folds where user_id = ? and requirement_id = ?", actor, requirementId)
+        Added(id, reopened)
+    }
+
     fun mark(item: ReqItem, mark: ItemMark, value: Boolean, actor: Long) {
         if (mark.of(item) == value) return
         Db.tx { c ->

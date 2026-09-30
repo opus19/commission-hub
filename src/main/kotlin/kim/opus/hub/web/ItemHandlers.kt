@@ -61,7 +61,7 @@ object ItemHandlers {
                 if (on) append(" is-checked")
                 if (editable) append(" is-editable")
             }
-            """<li class="$cls">$input<div class="req-item-body"><label class="req-item-text" for="$id"><span class="req-item-label">${e(item.body)}</span></label>${menu(files[item.id].orEmpty())}</div></li>"""
+            """<li class="$cls" id="it${item.id}">$input<div class="req-item-body"><label class="req-item-text" for="$id"><span class="req-item-label">${e(item.body)}</span></label>${menu(files[item.id].orEmpty())}</div></li>"""
         }
         val rid = view.requirement.id
         val folded = ItemRepo.folded(user.id, rid)
@@ -107,6 +107,39 @@ object ItemHandlers {
   <button class="req-edit-add" type="button" data-item-add><i class="bi bi-plus-lg" aria-hidden="true"></i>添加一项</button>
   <template data-item-template>${editRow(null, false)}</template>
 </div>"""
+
+    const val NEED_BODY = "先写一下要加的内容"
+    const val TOO_LONG = "加入清单的内容最多 $MAX_LENGTH 字"
+
+    fun add(ctx: Context) {
+        val user = ctx.user()
+        if (user.isAdmin) throw ForbiddenResponse("开发者请在编辑需求里改清单")
+        val view = Access.requirement(user, ctx.idParam())
+        Access.writable(view)
+        val rid = view.requirement.id
+        val back = "/requirements/$rid"
+        val body = ctx.formParam("body")?.replace("\r\n", "\n")?.replace('\r', '\n')?.trim().orEmpty()
+        val problem = when {
+            body.isEmpty() -> NEED_BODY
+            body.length > MAX_LENGTH -> TOO_LONG
+            ItemRepo.count(rid) >= MAX_ITEMS -> "清单最多 $MAX_ITEMS 项"
+            else -> null
+        }
+        if (problem != null) {
+            ctx.flashErr(problem)
+            ctx.go(back)
+            return
+        }
+        val stored = Uploads.storeAll(ctx.uploadedFiles("files").filter { it.size() > 0 })
+        val added = try {
+            ItemRepo.append(rid, body, stored, user.id)
+        } catch (ex: Exception) {
+            stored.forEach { Uploads.deleteQuietly(it.storedName) }
+            throw ex
+        }
+        ctx.flashOk(if (added.reopened) "已加入需求清单，需求退回待开发" else "已加入需求清单")
+        ctx.go("$back#it${added.id}")
+    }
 
     fun done(ctx: Context) = toggle(ctx, ItemMark.DONE)
 

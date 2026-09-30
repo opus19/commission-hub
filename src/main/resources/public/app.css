@@ -527,6 +527,22 @@ code {
   --bs-btn-hover-border-color: var(--vs-accent);
 }
 
+.btn-soft {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: #45494e;
+  --bs-btn-border-color: #45494e;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #50555b;
+  --bs-btn-hover-border-color: #50555b;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #3a3d41;
+  --bs-btn-active-border-color: #3a3d41;
+  --bs-btn-disabled-color: rgba(255, 255, 255, .6);
+  --bs-btn-disabled-bg: #45494e;
+  --bs-btn-disabled-border-color: #45494e;
+  --bs-btn-focus-shadow-rgb: 0, 120, 212;
+}
+
 .btn-link {
   --bs-btn-color: var(--vs-link);
   --bs-btn-hover-color: #7fc1ff;
@@ -651,7 +667,12 @@ code {
   display: inline-block;
 }
 
+.btn-close:focus {
+  box-shadow: none;
+}
+
 .btn:focus-visible,
+.btn-close:focus-visible,
 .page-link:focus-visible,
 a:focus-visible {
   outline: 1px solid var(--vs-accent);
@@ -793,7 +814,6 @@ a:focus-visible {
   --bs-modal-header-border-color: var(--vs-border);
   --bs-modal-footer-border-color: var(--vs-border);
   --bs-modal-border-radius: 8px;
-  --bs-modal-box-shadow: 0 0 8px 2px rgba(0, 0, 0, .36);
 }
 
 .modal-title {
@@ -806,7 +826,6 @@ a:focus-visible {
 
 .hub-island {
   --bs-modal-border-radius: 14px;
-  --bs-modal-box-shadow: 0 24px 64px rgba(0, 0, 0, .55);
 }
 
 .hub-island-wide {
@@ -819,7 +838,10 @@ a:focus-visible {
 
 .hub-island .modal-content {
   transform-origin: 0 0;
-  box-shadow: var(--bs-modal-box-shadow);
+}
+
+.hub-island [data-island-cancel] {
+  display: none;
 }
 
 .hub-island-wide form {
@@ -1674,7 +1696,7 @@ a[data-href]:not([class]):hover {
   width: calc(100% + 2 * var(--isl-x));
   margin: calc(-1 * var(--isl-y)) calc(-1 * var(--isl-x)) calc(-1 * var(--isl-y));
   padding: calc(.25rem + var(--isl-y)) calc(.5rem + var(--isl-x)) calc(.5rem + var(--isl-y));
-  overflow-y: auto;
+  overflow-y: hidden;
   background-color: #333;
   border-color: var(--vs-accent);
   border-radius: 10px;
@@ -1684,6 +1706,10 @@ a[data-href]:not([class]):hover {
 
 .req-edit-item.is-open.is-sizing .req-edit-text {
   transition: height .16s ease-out, margin .5s var(--ease-spring), padding .5s var(--ease-spring), width .5s var(--ease-spring), border-radius .35s ease, box-shadow .3s ease, background-color .2s ease, border-color .15s ease;
+}
+
+.req-edit-item.is-open .req-edit-text.can-scroll {
+  overflow-y: auto;
 }
 
 .req-edit-item.is-growing .req-edit-text {
@@ -1927,15 +1953,6 @@ a[data-href]:not([class]):hover {
   scroll-margin-top: 1rem;
 }
 
-.composer-error {
-  padding: 0 .75rem .5rem;
-  font-size: .8125rem;
-  color: #f48771;
-}
-
-.composer-error[hidden] {
-  display: none;
-}
 
 .invalid-feedback {
   color: #f48771;
@@ -2655,6 +2672,19 @@ a[data-href]:not([class]):hover {
 .composer-file-input:focus-visible + .composer-attach {
   outline: 1px solid var(--vs-accent);
   outline-offset: 1px;
+}
+
+.composer-send {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  gap: .5rem;
+  margin-left: auto;
+}
+
+.composer-send .btn {
+  min-width: 5.125rem;
 }
 
 .status-steps {

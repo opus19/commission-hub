@@ -84,13 +84,11 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
       ${csrfInput(ctx)}
       <div class="modal-header">
         <h5 class="modal-title" id="deleteProjectLabel">输入项目名称 <strong class="text-break">$name</strong> 确认删除</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
       </div>
       <div class="modal-body">
         <input class="form-control" id="dp_name" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$name" aria-labelledby="deleteProjectLabel">
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">取消</button>
         <button type="submit" class="btn btn-danger" disabled>删除这个项目</button>
       </div>
     </form>
