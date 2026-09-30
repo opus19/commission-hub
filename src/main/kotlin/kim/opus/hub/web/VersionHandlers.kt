@@ -1,15 +1,18 @@
 package kim.opus.hub.web
 
 import io.javalin.http.Context
+import io.javalin.http.NotFoundResponse
 import kim.opus.hub.data.*
 import kim.opus.hub.model.*
 import kim.opus.hub.view.*
 
 object VersionHandlers {
 
-    private fun fileRow(f: VersionFile): String {
+    private fun fileRow(f: VersionFile, closed: Boolean): String {
         val name = e(f.originalName)
-        return """<li><a class="dl-file" href="/downloads/${f.id}" title="下载 $name"><i class="bi ${fileIcon(f.originalName)} dl-file-icon" aria-hidden="true"></i><span class="dl-file-name">$name</span><span class="dl-file-size">${e(formatSize(f.sizeBytes))}</span></a></li>"""
+        val inner = """<i class="bi ${fileIcon(f.originalName)} dl-file-icon" aria-hidden="true"></i><span class="dl-file-name">$name</span><span class="dl-file-size">${e(formatSize(f.sizeBytes))}</span>"""
+        if (closed || f.purgedAt != null) return """<li><span class="dl-file is-gone" title="$name（已清理）">$inner</span></li>"""
+        return """<li><a class="dl-file" href="/downloads/${f.id}" title="下载 $name">$inner</a></li>"""
     }
 
     private fun deleteForm(ctx: Context, v: ReqVersion, latest: Boolean): String {
@@ -17,7 +20,7 @@ object VersionHandlers {
         return """<form method="post" action="/versions/${v.id}/delete" class="dl-del-form${if (latest) "" else " dl-fill"}" data-confirm="删除${e(what)}？里面的文件也会一起删掉">${csrfInput(ctx)}<button class="dl-del" type="submit" title="删除这个版本" aria-label="删除${e(what)}"><i class="bi bi-trash" aria-hidden="true"></i></button></form>"""
     }
 
-    private fun block(ctx: Context, v: ReqVersion, latest: Boolean, canManage: Boolean): String {
+    private fun block(ctx: Context, v: ReqVersion, latest: Boolean, canManage: Boolean, closed: Boolean): String {
         val del = if (canManage) deleteForm(ctx, v, latest) else ""
         val head = if (latest)
             """<span class="dl-latest">最新版本</span><span class="dl-time dl-fill">${timeTag(v.createdAt)}</span>$del"""
@@ -26,7 +29,7 @@ object VersionHandlers {
         return """
 <div class="dl-version">
   <div class="dl-head">$head</div>
-  <ul class="dl-files">${v.files.joinToString("") { fileRow(it) }}</ul>
+  <ul class="dl-files">${v.files.joinToString("") { fileRow(it, closed) }}</ul>
 </div>"""
     }
 
@@ -46,18 +49,19 @@ $mark"""
     fun card(ctx: Context, user: User, view: RequirementView, versions: List<ReqVersion>): String {
         val canManage = user.isAdmin && !view.readOnly
         if (versions.isEmpty() && !canManage) return ""
+        val closed = view.readOnly
         val action = if (!canManage) "" else
             """<button class="dl-add" type="button" data-island-modal="#uploadVersion"><i class="bi bi-upload" aria-hidden="true"></i>上传新版本</button>"""
         val body = if (versions.isEmpty()) """<p class="dl-empty">还没有上传版本</p>""" else buildString {
-            append(block(ctx, versions[0], true, canManage))
+            append(block(ctx, versions[0], true, canManage, closed))
             val older = versions.drop(1)
             if (older.isNotEmpty()) {
                 append("""<details class="dl-older"><summary><i class="bi bi-chevron-right dl-older-icon" aria-hidden="true"></i>历史版本<span class="count-muted">${older.size}</span></summary>""")
-                older.forEach { append(block(ctx, it, false, canManage)) }
+                older.forEach { append(block(ctx, it, false, canManage, closed)) }
                 append("</details>")
             }
         }
-        return """<div class="dl-card" id="downloads">""" + sideCard("下载", body, flush = true, action = action) + "</div>" +
+        return """<div class="dl-card${if (closed) " is-closed" else ""}" id="downloads">""" + sideCard("下载", body, flush = true, action = action) + "</div>" +
             if (canManage) uploadModal(ctx, view.requirement) else ""
     }
 
@@ -93,7 +97,8 @@ $mark"""
     }
 
     fun download(ctx: Context) {
-        val (file, _) = Access.versionFile(ctx.user(), ctx.idParam())
+        val (file, view) = Access.versionFile(ctx.user(), ctx.idParam())
+        if (file.purgedAt != null || view.readOnly) throw NotFoundResponse("需求归档后下载文件已清理，不能再下载")
         Uploads.send(ctx, file.storedName, file.originalName)
     }
 }

@@ -83,14 +83,11 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
     <form class="modal-content" method="post" action="/projects/${project.id}/delete">
       ${csrfInput(ctx)}
       <div class="modal-header">
-        <h5 class="modal-title" id="deleteProjectLabel">删除项目</h5>
+        <h5 class="modal-title" id="deleteProjectLabel">输入项目名称 <strong class="text-break">$name</strong> 确认删除</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-danger notice-bar mb-3" role="alert"><span class="fw-bold">删除后无法恢复</span></div>
-        <p class="small mb-3">项目 <strong class="text-break">$name</strong> 里的所有需求，以及它们的补充信息、附件和上传的版本都会被永久删除，客户也看不到这个项目了</p>
-        <label class="form-label" for="dp_name">输入项目名称 <strong class="text-break">$name</strong> 确认删除</label>
-        <input class="form-control" id="dp_name" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$name">
+        <input class="form-control" id="dp_name" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$name" aria-labelledby="deleteProjectLabel">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">取消</button>
@@ -110,7 +107,7 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
 
         return """
 <div class="mb-4">
-  <h3 class="mb-2 text-break"><span class="page-hero">${e(project.name)}</span></h3>
+  <h3 class="mb-2 text-break">${e(project.name)}</h3>
   <div class="small text-secondary">${createdTag(project.createdAt)}</div>
   <div class="d-flex flex-wrap gap-2 mt-3">$buttons</div>
 </div>

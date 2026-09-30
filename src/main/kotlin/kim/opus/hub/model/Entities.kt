@@ -96,7 +96,8 @@ data class VersionFile(
     val storedName: String,
     val sizeBytes: Long,
     val contentType: String?,
-    val createdAt: String
+    val createdAt: String,
+    val purgedAt: String?
 )
 
 data class ReqVersion(

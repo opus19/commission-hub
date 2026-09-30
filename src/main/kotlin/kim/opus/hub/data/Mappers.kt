@@ -72,7 +72,8 @@ internal fun mapVersionFile(rs: ResultSet) = VersionFile(
     storedName = rs.getString("stored_name"),
     sizeBytes = rs.getLong("size_bytes"),
     contentType = rs.getString("content_type"),
-    createdAt = rs.getString("created_at")
+    createdAt = rs.getString("created_at"),
+    purgedAt = rs.getString("purged_at")
 )
 
 internal fun mapVersion(rs: ResultSet) = ReqVersion(

@@ -61,8 +61,8 @@ object Transitions {
     fun allowed(user: User, view: RequirementView): List<ReqStatus> {
         val current = view.requirement.statusEnum
         return when {
-            current == ReqStatus.ARCHIVED -> if (user.isAdmin) listOf(ReqStatus.TODO) else emptyList()
-            user.isAdmin -> ReqStatus.entries.filter { it != current }
+            current == ReqStatus.ARCHIVED -> emptyList()
+            user.isAdmin -> ReqStatus.entries.filter { it != current && it != ReqStatus.ARCHIVED }
             current == ReqStatus.TESTING -> listOf(ReqStatus.ARCHIVED)
             else -> emptyList()
         }

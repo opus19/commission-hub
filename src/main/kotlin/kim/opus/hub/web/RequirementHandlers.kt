@@ -9,7 +9,7 @@ import kim.opus.hub.view.*
 
 object RequirementHandlers {
 
-    private val steps = listOf(ReqStatus.TODO to "待开发", ReqStatus.TESTING to "待测试", ReqStatus.ARCHIVED to "归档")
+    private val steps = listOf(ReqStatus.TODO to "待开发", ReqStatus.TESTING to "待测试")
 
     private class ReqForm(
         val title: String,
@@ -219,19 +219,39 @@ object RequirementHandlers {
         ctx.go("/requirements/${r.id}")
     }
 
+    private fun acceptModal(ctx: Context, r: Requirement): String {
+        val title = e(r.title)
+        return """
+<div class="modal hub-island" id="acceptReq" tabindex="-1" aria-labelledby="acceptReqLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/requirements/${r.id}/status">
+      ${csrfInput(ctx)}
+      <input type="hidden" name="to" value="${ReqStatus.ARCHIVED.code}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="acceptReqLabel">输入需求标题 <strong class="text-break">$title</strong> 确认验收</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <input class="form-control" id="ar_title" type="text" name="confirm_name" autocomplete="off" spellcheck="false" data-confirm-name="$title" aria-labelledby="acceptReqLabel">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="submit" class="btn btn-success" disabled>验收通过</button>
+      </div>
+    </form>
+  </div>
+</div>"""
+    }
+
     private fun clientActionBox(ctx: Context, r: Requirement, targets: List<ReqStatus>): String {
         if (ReqStatus.ARCHIVED !in targets) return ""
         return """
 <div class="alert alert-warning notice-bar accept-bar mb-4" role="status">
   <span class="fw-bold">这条需求等你验收</span>
   <div class="accept-actions">
-    <form method="post" action="/requirements/${r.id}/status" class="m-0">
-      ${csrfInput(ctx)}
-      <input type="hidden" name="to" value="${ReqStatus.ARCHIVED.code}">
-      <button class="btn btn-success btn-sm" type="submit"><i class="bi bi-check-circle me-1"></i>验收通过</button>
-    </form>
+    <button class="btn btn-success btn-sm" type="button" data-island-modal="#acceptReq"><i class="bi bi-check-circle me-1"></i>验收通过</button>
   </div>
-</div>"""
+</div>""" + acceptModal(ctx, r)
     }
 
     private fun readOnlyBanner(view: RequirementView): String {
@@ -261,7 +281,7 @@ object RequirementHandlers {
 <div>
   ${readOnlyBanner(view)}
   <div class="d-flex align-items-baseline gap-3 border-bottom pb-3 mb-4">
-    <h1 class="h3 mb-0 flex-grow-1 min-w-0 text-wrap text-break"><span class="page-hero">${e(r.title)}</span></h1>
+    <h1 class="h3 mb-0 flex-grow-1 min-w-0 text-wrap text-break">${e(r.title)}</h1>
     $edit
   </div>
   ${if (!user.isAdmin) clientActionBox(ctx, r, targets) else ""}
@@ -291,15 +311,7 @@ object RequirementHandlers {
     private fun adminStatusCard(ctx: Context, view: RequirementView): String {
         val r = view.requirement
         val current = r.statusEnum
-        if (current == ReqStatus.ARCHIVED) {
-            val body = """
-<form method="post" action="/requirements/${r.id}/status" class="m-0">
-  ${csrfInput(ctx)}
-  <input type="hidden" name="to" value="${ReqStatus.TODO.code}">
-  <button class="btn btn-sm btn-outline-secondary w-100" type="submit"><i class="bi bi-box-arrow-up me-1"></i>取消归档</button>
-</form>"""
-            return sideCard("推进状态", body)
-        }
+        if (current == ReqStatus.ARCHIVED) return ""
         val buttons = steps.joinToString("") { (s, text) ->
             if (s == current) {
                 """<span class="status-step-cell"><span class="status-step is-current" aria-current="step">${e(text)}</span></span>"""
@@ -318,15 +330,15 @@ object RequirementHandlers {
         val code = ctx.formParam("to")
         val target = ReqStatus.entries.firstOrNull { it.code == code } ?: throw BadRequestResponse("状态不合法")
         Transitions.check(user, view, target)
-        ReqRepo.setStatus(view.requirement.id, current, target, user.id, null)
-        ctx.flashOk(
-            when {
-                target == ReqStatus.ARCHIVED && !user.isAdmin -> "验收通过，需求已归档"
-                target == ReqStatus.ARCHIVED -> "需求已归档"
-                current == ReqStatus.ARCHIVED -> "已取消归档，需求回到「${target.label}」"
-                else -> "状态已改为「${target.label}」"
-            }
-        )
-        ctx.go("/requirements/${view.requirement.id}")
+        val r = view.requirement
+        if (target == ReqStatus.ARCHIVED && ctx.formParam("confirm_name")?.trim() != r.title.trim()) {
+            ctx.flashErr("输入的需求标题不对，没有验收")
+            ctx.go("/requirements/${r.id}")
+            return
+        }
+        val purge = ReqRepo.setStatus(r.id, current, target, user.id, null)
+        purge.stored.forEach { Uploads.deleteQuietly(it) }
+        ctx.flashOk(if (target == ReqStatus.ARCHIVED) "验收通过，需求已归档" else "状态已改为「${target.label}」")
+        ctx.go("/requirements/${r.id}")
     }
 }

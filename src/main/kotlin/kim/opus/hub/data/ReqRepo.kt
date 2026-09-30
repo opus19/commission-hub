@@ -124,7 +124,7 @@ object ReqRepo {
         if (count > 0) Audit.add(c, actor, "requirement", id, "attached", "$count 个附件")
     }
 
-    fun setStatus(id: Long, from: ReqStatus, to: ReqStatus, actor: Long, note: String?) = Db.tx { c ->
+    fun setStatus(id: Long, from: ReqStatus, to: ReqStatus, actor: Long, note: String?): VersionRepo.Purge = Db.tx { c ->
         val closedAt = if (to == ReqStatus.ARCHIVED) nowIso() else null
         c.exec(
             "update requirements set status = ?, closed_at = ?, updated_at = ? where id = ?",
@@ -140,6 +140,7 @@ object ReqRepo {
             }
         }
         Audit.add(c, actor, "requirement", id, "status", detail)
+        if (to == ReqStatus.ARCHIVED) VersionRepo.purge(c, id, actor) else VersionRepo.Purge.NONE
     }
 
     fun touch(c: Connection, id: Long) {

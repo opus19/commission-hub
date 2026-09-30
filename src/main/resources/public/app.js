@@ -184,89 +184,66 @@
     if (auto) auto.focus({ preventScroll: true });
   }
 
-  function depthOf(p) {
-    if (p === "/login") return -1;
-    if (p === "/" || p === "/projects") return 0;
-    if (p === "/requirements/new" || /^\/requirements\/\d+\/edit$/.test(p)) return 3;
-    if (/^\/requirements\/\d+$/.test(p)) return 2;
-    return 1;
+  var RISE_Y = 16;
+  var RISE_MS = 560;
+  var FADE_MS = 380;
+  var RISE_EASE = "cubic-bezier(.2, .7, .3, 1)";
+  var BLOCK_GAP = 70;
+  var ROW_GAP = 45;
+
+  function rise(el, delay) {
+    el.animate([{ transform: "translateY(" + RISE_Y + "px)" }, { transform: "none" }], { duration: RISE_MS, delay: delay, easing: RISE_EASE, fill: "backwards" });
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, delay: delay, easing: "ease", fill: "backwards" });
   }
 
-  function direction(from, to) {
-    var a = depthOf(from);
-    var b = depthOf(to);
-    return b > a ? "forward" : b < a ? "back" : "fade";
+  function inView(el) {
+    var r = el.getBoundingClientRect();
+    return r.height > 0 && r.bottom > -40 && r.top < window.innerHeight + 40;
   }
 
-  function enterPage(dir) {
-    var area = document.querySelector(".editor-area");
-    var el = area ? area.firstElementChild : null;
-    if (!el || typeof el.animate !== "function") return;
-    var dx = dir === "forward" ? 16 : dir === "back" ? -16 : 0;
-    if (calm() || !dx) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 120 : 200, easing: "ease" });
-    else el.animate([{ opacity: 0, transform: "translateX(" + dx + "px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: EASE_OUT });
-  }
-
-  function canMorphPage() {
-    return typeof document.startViewTransition === "function" && !calm() && document.visibilityState === "visible";
-  }
-
-  function heroLink(path) {
-    var p = CSS.escape(path);
-    return document.querySelector('.repo-name[data-href="' + p + '"], [data-req] > h5 > a[data-href="' + p + '"]');
-  }
-
-  function heroOk(el) {
-    if (!el) return false;
-    var rs = el.getClientRects();
-    if (rs.length !== 1) return false;
-    var r = rs[0];
-    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
-  }
-
-  var vtSeq = 0;
-
-  function heroCard(hero, deeper) {
-    if (!hero) return null;
-    return deeper ? hero.closest(".page-main") : hero.closest(".repo-card, [data-req]");
-  }
-
-  function pageTransition(dir, from, to, carry, update) {
-    var deeper = dir === "forward";
-    var mode = dir;
-    var oldHero = deeper ? heroLink(to) : dir === "back" ? document.querySelector(".page-hero") : null;
-    var oldCard = heroCard(oldHero, !deeper);
-    if (!heroOk(oldHero) || !oldCard) {
-      oldHero = null;
-      oldCard = null;
-    }
-    if (oldHero) {
-      oldHero.style.viewTransitionName = "hub-hero";
-      oldCard.style.viewTransitionName = "hub-card";
-      mode = deeper ? "card-in" : "card-out";
-    }
-    if (carry) {
-      carry.content.style.viewTransitionName = "hub-island";
-      if (carry.shade) carry.shade.style.viewTransitionName = "hub-shade";
-    }
-    var tok = ++vtSeq;
-    root.setAttribute("data-vt", mode);
-    var named = [];
-    var vt = document.startViewTransition(function () {
-      update();
-      if (!oldHero) return;
-      var hero = deeper ? document.querySelector(".page-hero") : heroLink(from);
-      var card = heroCard(hero, deeper);
-      if (!heroOk(hero) || !card) return;
-      hero.style.viewTransitionName = "hub-hero";
-      card.style.viewTransitionName = "hub-card";
-      named = [hero, card];
+  function blocksOf(box) {
+    var out = [];
+    Array.prototype.forEach.call(box.children, function (c) {
+      if (c.hidden || c.matches(".modal, template, script, style")) return;
+      if (c.tagName === "DIV" && !c.attributes.length && c.children.length) out = out.concat(blocksOf(c));
+      else out.push(c);
     });
-    var done = function () {
-      named.forEach(function (el) { el.style.viewTransitionName = ""; });
-      if (tok === vtSeq) root.removeAttribute("data-vt");
-    };
-    vt.finished.then(done, done);
+    return out;
+  }
+
+  function rowsOf(block) {
+    if (block.matches("[data-list-body]")) return Array.prototype.slice.call(block.querySelectorAll("[data-req], .empty-state, nav"));
+    if (block.matches(".row") && block.querySelector(".repo-card")) return Array.prototype.slice.call(block.children);
+    return null;
+  }
+
+  function enterPage() {
+    var area = document.querySelector(".editor-area");
+    var shell = area ? area.firstElementChild : null;
+    if (!shell || typeof shell.animate !== "function") return;
+    if (calm()) {
+      shell.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "ease" });
+      return;
+    }
+    var main = document.querySelector(".page-main");
+    if (!main) {
+      rise(shell, 0);
+      return;
+    }
+    var step = 0;
+    blocksOf(main).forEach(function (b) {
+      var rows = rowsOf(b);
+      var base = Math.min(step, 5) * BLOCK_GAP;
+      if (rows) {
+        rows.filter(inView).forEach(function (row, j) { rise(row, base + Math.min(j, 7) * ROW_GAP); });
+        step++;
+      } else if (inView(b)) {
+        rise(b, base);
+        step++;
+      }
+    });
+    var side = document.querySelector(".page-right-side");
+    if (side) blocksOf(side).filter(inView).forEach(function (b, j) { rise(b, BLOCK_GAP + Math.min(j, 3) * BLOCK_GAP); });
   }
 
   function releaseForm(form) {
@@ -354,28 +331,17 @@
         if (same) mode = opts.form ? "keep" : "top";
         else if (typeof opts.scroll === "number") mode = opts.scroll;
       }
-      var dir = moved ? direction(from, pathOnly(to)) : "";
-      if (moved && canMorphPage()) {
-        var doc = parsePage(r.html);
-        pageTransition(dir, from, pathOnly(to), carry, function () {
-          if (carry) releaseIsland();
-          render(doc);
-          settle(mode, hash, keepY);
-        });
-        return;
-      }
       var ghost = carry ? releaseIsland() : null;
       var segs = moved ? null : segSnapshot();
       var lives = moved ? null : liveSnapshot();
-      var page0 = moved ? null : listPage();
       render(r.html);
       settle(mode, hash, keepY);
       if (moved) {
-        enterPage(dir);
+        enterPage();
       } else {
-        var dirs = segReplay(segs);
+        segReplay(segs);
         livePop(lives);
-        if (was && cur && cur.path !== was) listIn(dirs.tabs || 0, page0);
+        if (was && cur && cur.path !== was) listIn();
       }
       if (ghost) ghostOut(ghost);
     }).catch(function (err) {
@@ -618,7 +584,7 @@
 
   document.addEventListener("animationend", function (event) {
     var t = event.target;
-    if (event.animationName === "hub-landed" && t instanceof Element) t.classList.remove("is-landed");
+    if (t instanceof Element && event.animationName === "hub-landed") t.classList.remove("is-landed");
   });
 
   function reveal(id, gentle) {
@@ -1441,27 +1407,31 @@
     var g = group.getBoundingClientRect();
     var r = el.getBoundingClientRect();
     if (r.width < 1 || g.width < 1) return null;
-    return { left: r.left - g.left, top: r.top - g.top, width: r.width, height: r.height, radius: getComputedStyle(el).borderRadius };
+    return { left: r.left - g.left - group.clientLeft, top: r.top - g.top - group.clientTop, width: r.width, height: r.height };
+  }
+
+  function segDuration(group) {
+    return group.getAttribute("data-seg") === "status" ? 280 : 240;
   }
 
   function segNow(group) {
     var run = segRun;
     if (run && run.group === group) {
-      var t = run.anims[0].effect.getComputedTiming();
+      var t = run.anim.effect.getComputedTiming();
       var p = t.progress === null ? 1 : t.progress;
       var mix = function (k) { return run.from[k] + (run.to[k] - run.from[k]) * p; };
-      return { left: mix("left"), top: mix("top"), width: mix("width"), height: mix("height"), radius: p < 0.5 ? run.from.radius : run.to.radius };
+      return { left: mix("left"), top: mix("top"), width: mix("width"), height: mix("height") };
     }
     var on = group.querySelector("[aria-current]");
     return on ? segBox(group, on) : null;
   }
 
   function segClear(run) {
-    run.anims.forEach(function (a) { a.cancel(); });
+    run.anim.cancel();
     var g = run.group;
     g.classList.remove("is-seg-moving", "is-seg-press");
     if (run.target) run.target.classList.remove("is-seg-target");
-    ["--seg-x", "--seg-y", "--seg-w", "--seg-h", "--seg-r"].forEach(function (k) { g.style.removeProperty(k); });
+    ["--seg-x", "--seg-y", "--seg-w", "--seg-h"].forEach(function (k) { g.style.removeProperty(k); });
     if (!g.getAttribute("style")) g.removeAttribute("style");
     if (segRun === run) segRun = null;
   }
@@ -1472,20 +1442,17 @@
     group.style.setProperty("--seg-y", to.top + "px");
     group.style.setProperty("--seg-w", to.width + "px");
     group.style.setProperty("--seg-h", to.height + "px");
-    group.style.setProperty("--seg-r", to.radius);
     group.classList.add("is-seg-moving");
-    var keys = [{ transform: flip(from, to), borderRadius: from.radius }, { transform: "none", borderRadius: to.radius }];
-    var timing = { duration: opts.duration, easing: opts.easing };
-    var anims = ["::before", "::after"].map(function (pe) {
-      return group.animate(keys, { duration: timing.duration, easing: timing.easing, pseudoElement: pe });
-    });
-    var run = { group: group, from: from, to: to, anims: anims, at: performance.now(), duration: opts.duration, hold: !!opts.hold, back: opts.back || null, dir: opts.dir || 0, target: opts.target || null };
+    var elapsed = Math.min(opts.elapsed || 0, opts.duration);
+    var anim = group.animate([{ transform: flip(from, to) }, { transform: "none" }], { duration: opts.duration, easing: EASE_EMPH, pseudoElement: "::before" });
+    if (elapsed) anim.currentTime = elapsed;
+    var run = { group: group, from: from, to: to, anim: anim, at: performance.now() - elapsed, duration: opts.duration, hold: !!opts.hold, back: opts.back || null, target: opts.target || null };
     if (run.target) {
       run.target.classList.add("is-seg-target");
       group.classList.add("is-seg-press");
     }
     segRun = run;
-    anims[0].finished.then(function () {
+    anim.finished.then(function () {
       if (segRun === run && !run.hold) segClear(run);
     }, function () { });
     return run;
@@ -1498,7 +1465,7 @@
     var to = segBox(group, el);
     if (!from || !to || near(from, to)) return;
     var back = segRun && segRun.group === group && segRun.back ? segRun.back : group.querySelector("[aria-current]");
-    segSlide(group, from, to, { duration: 380, easing: EASE_POP, hold: true, back: back, dir: to.left > from.left ? 1 : -1, target: el });
+    segSlide(group, from, to, { duration: segDuration(group), hold: true, back: back, target: el });
   }
 
   function segRevert() {
@@ -1510,57 +1477,45 @@
       segClear(run);
       return;
     }
-    segSlide(run.group, from, to, { duration: 260, easing: EASE_EMPH });
+    segSlide(run.group, from, to, { duration: segDuration(run.group) });
   }
 
   function segSnapshot() {
     var out = {};
+    var now = performance.now();
     document.querySelectorAll("[data-seg]").forEach(function (g) {
       var box = segNow(g);
       if (!box) return;
       var run = segRun && segRun.group === g ? segRun : null;
-      out[g.getAttribute("data-seg")] = { box: box, left: run ? Math.max(0, run.duration - (performance.now() - run.at)) : 0, dir: run ? run.dir : 0 };
+      out[g.getAttribute("data-seg")] = run
+        ? { box: box, from: run.from, to: run.to, elapsed: now - run.at, duration: run.duration, taken: now }
+        : { box: box, from: box, to: box, elapsed: 0, duration: 0, taken: now };
     });
-    if (segRun && !segRun.group.isConnected) segRun = null;
     return out;
   }
 
   function segReplay(snap) {
-    var dirs = {};
     if (segRun && !segRun.group.isConnected) segRun = null;
+    if (!snap || calm()) return;
     document.querySelectorAll("[data-seg]").forEach(function (g) {
-      var key = g.getAttribute("data-seg");
-      var s = snap[key];
+      var s = snap[g.getAttribute("data-seg")];
       var on = g.querySelector("[aria-current]");
       var to = s && on ? segBox(g, on) : null;
-      if (!to) return;
-      var moved = to.left - s.box.left;
-      dirs[key] = s.dir || (moved > 1 ? 1 : moved < -1 ? -1 : 0);
-      if (near(s.box, to) || calm() || typeof g.animate !== "function") return;
-      if (s.left > 0) segSlide(g, s.box, to, { duration: Math.max(160, s.left), easing: EASE_OUT });
-      else segSlide(g, s.box, to, { duration: 380, easing: EASE_POP });
+      if (!to || typeof g.animate !== "function") return;
+      var elapsed = s.elapsed + (performance.now() - s.taken);
+      if (elapsed < s.duration && near(s.to, to)) segSlide(g, s.from, to, { duration: s.duration, elapsed: elapsed });
+      else if (!near(s.box, to)) segSlide(g, s.box, to, { duration: segDuration(g) });
     });
-    return dirs;
   }
 
-  function listPage() {
-    var body = document.querySelector("[data-list-body]");
-    return body ? parseInt(body.getAttribute("data-page"), 10) || 1 : null;
-  }
-
-  function listIn(dir, before) {
+  function listIn() {
     var body = document.querySelector("[data-list-body]");
     if (!body || typeof body.animate !== "function") return;
-    if (!dir && before !== null) {
-      var now = listPage();
-      dir = now > before ? 1 : now < before ? -1 : 0;
-    }
     if (calm()) {
       body.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease" });
       return;
     }
-    var start = dir ? "translateX(" + (dir * 18) + "px)" : "translateY(6px)";
-    body.animate([{ opacity: 0, transform: start }, { opacity: 1, transform: "none" }], { duration: 320, easing: EASE_EMPH });
+    rowsOf(body).filter(inView).forEach(function (row, j) { rise(row, Math.min(j, 7) * ROW_GAP); });
   }
 
   function liveSnapshot() {

@@ -317,6 +317,9 @@ object Schema {
         drop table v18_move;
 
         update requirements set body = null
+        """,
+        19 to """
+        alter table req_version_files add column purged_at text
         """
     )
 

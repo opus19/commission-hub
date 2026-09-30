@@ -28,10 +28,7 @@ object ItemHandlers {
         else -> !user.isAdmin && view.requirement.statusEnum == ReqStatus.TESTING
     }
 
-    private fun locked(mark: ItemMark, item: ReqItem): Boolean = mark == ItemMark.TESTED && !item.done
-
-    fun canMark(user: User, view: RequirementView, mark: ItemMark, item: ReqItem): Boolean =
-        stageOpen(user, view, mark) && !locked(mark, item)
+    fun canMark(user: User, view: RequirementView, mark: ItemMark): Boolean = stageOpen(user, view, mark)
 
     fun readForm(ctx: Context): List<Row> {
         val refs = ctx.formParams("item_ref")
@@ -52,8 +49,7 @@ object ItemHandlers {
         val open = stageOpen(user, view, mark)
         val rows = items.joinToString("") { item ->
             val on = mark.of(item)
-            val waiting = locked(mark, item)
-            val editable = open && !waiting
+            val editable = open
             val id = "ri${item.id}"
             val checked = if (on) " checked" else ""
             val input = if (editable)
@@ -64,7 +60,6 @@ object ItemHandlers {
                 append("req-item")
                 if (on) append(" is-checked")
                 if (editable) append(" is-editable")
-                if (waiting) append(" is-locked")
             }
             """<li class="$cls">$input<div class="req-item-body"><label class="req-item-text" for="$id"><span class="req-item-label">${e(item.body)}</span></label>${menu(files[item.id].orEmpty())}</div></li>"""
         }
@@ -120,7 +115,7 @@ object ItemHandlers {
     private fun toggle(ctx: Context, mark: ItemMark) {
         val user = ctx.user()
         val (item, view) = Access.item(user, ctx.idParam())
-        if (!canMark(user, view, mark, item)) throw ForbiddenResponse("现在不能改这一项")
+        if (!canMark(user, view, mark)) throw ForbiddenResponse("现在不能改这一项")
         ItemRepo.mark(item, mark, ctx.formParam("value") == "1", user.id)
         ctx.status(204)
     }

@@ -69,14 +69,14 @@ fun queryGroup(items: List<Pair<String, String>>, current: String?, href: (Strin
     val currentMore = more.firstOrNull { it.first == current }
 
     val desktop = buildString {
-        append("""<div class="btn-group btn-group-sm md-show" role="group" data-seg="tabs">""")
+        append("""<div class="seg md-show" role="group" aria-label="筛选" data-seg="tabs">""")
         shown.forEach { (key, label) ->
             val on = key == current
-            append("""<a class="btn btn-outline-secondary text-nowrap${if (on) " active" else ""}" href="${e(href(key))}"${if (on) " aria-current=\"page\"" else ""}>$label</a>""")
+            append("""<a class="seg-item${if (on) " active" else ""}" href="${e(href(key))}"${if (on) " aria-current=\"page\"" else ""}>$label</a>""")
         }
         if (more.isNotEmpty()) {
-            append("""<div class="btn-group btn-group-sm" role="group">""")
-            append("""<button type="button" class="btn ${if (currentMore != null) "btn-secondary" else "btn-outline-secondary"} dropdown-toggle text-nowrap" data-bs-toggle="dropdown" aria-expanded="false">${currentMore?.second ?: "更多"}</button>""")
+            append("""<div class="dropdown">""")
+            append("""<button type="button" class="seg-item dropdown-toggle${if (currentMore != null) " active" else ""}" data-bs-toggle="dropdown" aria-expanded="false"${if (currentMore != null) " aria-current=\"page\"" else ""}>${currentMore?.second ?: "更多"}</button>""")
             append("""<ul class="dropdown-menu dropdown-menu-end">""")
             more.forEach { (key, label) ->
                 append("""<li><a class="dropdown-item${if (key == current) " active" else ""}" href="${e(href(key))}">$label</a></li>""")

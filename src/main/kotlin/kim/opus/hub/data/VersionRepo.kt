@@ -54,6 +54,43 @@ object VersionRepo {
         }
     }
 
+    data class Purge(val files: Int, val freed: Long, val stored: List<String>) {
+        operator fun plus(o: Purge) = Purge(files + o.files, freed + o.freed, stored + o.stored)
+
+        companion object {
+            val NONE = Purge(0, 0L, emptyList())
+        }
+    }
+
+    fun purge(c: Connection, requirementId: Long, actor: Long?): Purge {
+        val live = c.rows(
+            "select f.stored_name, f.size_bytes from req_version_files f join req_versions v on v.id = f.version_id where v.requirement_id = ? and f.purged_at is null",
+            requirementId
+        ) { rs -> rs.getString(1) to rs.getLong(2) }
+        if (live.isEmpty()) return Purge.NONE
+        c.exec(
+            "update req_version_files set purged_at = ? where purged_at is null and version_id in (select id from req_versions where requirement_id = ?)",
+            nowIso(), requirementId
+        )
+        val sizes = live.toMap()
+        val stored = sizes.keys.filter { name ->
+            c.count(
+                "select (select count(*) from req_version_files where stored_name = ? and purged_at is null) + (select count(*) from attachments where stored_name = ?)",
+                name, name
+            ) == 0L
+        }
+        val freed = stored.sumOf { sizes.getValue(it) }
+        Audit.add(c, actor, "requirement", requirementId, "versions_purged", "${live.size} 个文件，释放 ${formatSize(freed)}")
+        return Purge(live.size, freed, stored)
+    }
+
+    fun purgeArchived(): Purge = Db.tx { c ->
+        val ids = c.rows(
+            "select distinct v.requirement_id from req_version_files f join req_versions v on v.id = f.version_id join requirements r on r.id = v.requirement_id where r.status = 'archived' and f.purged_at is null order by v.requirement_id"
+        ) { rs -> rs.getLong(1) }
+        ids.fold(Purge.NONE) { acc, id -> acc + purge(c, id, null) }
+    }
+
     fun delete(version: ReqVersion, actor: Long): List<String> = Db.tx { c ->
         val stored = c.rows("select stored_name from req_version_files where version_id = ?", version.id) { rs -> rs.getString(1) }
         c.exec("delete from req_version_files where version_id = ?", version.id)
