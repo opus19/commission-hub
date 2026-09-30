@@ -267,6 +267,30 @@ object Schema {
         14 to """
         drop index if exists ux_users_username;
         create unique index ux_users_username on users(lower(username)) where active = 1
+        """,
+        15 to """
+        create table req_items (
+            id integer primary key autoincrement,
+            requirement_id integer not null references requirements(id) on delete cascade,
+            position integer not null,
+            body text not null,
+            done_at text,
+            tested_at text,
+            created_at text not null
+        );
+        create index ix_req_items_req on req_items(requirement_id, position)
+        """,
+        16 to """
+        alter table attachments add column item_id integer references req_items(id) on delete cascade;
+        create index ix_attachments_item on attachments(item_id)
+        """,
+        17 to """
+        create table item_folds (
+            user_id integer not null references users(id) on delete cascade,
+            requirement_id integer not null references requirements(id) on delete cascade,
+            primary key (user_id, requirement_id)
+        );
+        create index ix_item_folds_req on item_folds(requirement_id)
         """
     )
 

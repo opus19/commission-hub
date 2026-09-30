@@ -32,34 +32,6 @@ fun qs(vararg pairs: Pair<String, Any?>): String {
     return if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
 }
 
-private val urlPattern = Regex("""https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+""")
-
-private fun linkify(escaped: String): String = urlPattern.replace(escaped) { m ->
-    var url = m.value
-    var tail = ""
-    while (true) {
-        val cut = when {
-            url.endsWith("&quot;") -> 6
-            url.endsWith("&#39;") -> 5
-            url.endsWith("&gt;") -> 4
-            url.isNotEmpty() && url.last() in ".,;:!?)" -> 1
-            else -> 0
-        }
-        if (cut == 0 || url.length - cut < 10) break
-        tail = url.takeLast(cut) + tail
-        url = url.dropLast(cut)
-    }
-    """<a href="$url" target="_blank" rel="noopener noreferrer nofollow">$url</a>$tail"""
-}
-
-fun richText(value: String?, emptyText: String = "未填写"): String {
-    if (value.isNullOrBlank()) return """<p class="text-secondary">${e(emptyText)}</p>"""
-    val normalized = value.replace("\r\n", "\n").trim()
-    return normalized.split(Regex("\n\\s*\n")).joinToString("") { para ->
-        "<p>" + linkify(e(para.trim())).replace("\n", "<br>") + "</p>"
-    }
-}
-
 fun csrfInput(ctx: Context): String =
     """<input type="hidden" name="_csrf" value="${e(ctx.session().csrf)}">"""
 

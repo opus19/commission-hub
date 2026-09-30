@@ -36,6 +36,11 @@ object Access {
         return comment to requirement(user, comment.requirementId)
     }
 
+    fun item(user: User, itemId: Long): Pair<ReqItem, RequirementView> {
+        val item = ItemRepo.byId(itemId) ?: throw NotFoundResponse("清单项不存在")
+        return item to requirement(user, item.requirementId)
+    }
+
     fun writable(view: RequirementView) {
         if (view.readOnly) throw ForbiddenResponse("需求已归档，现在是只读的")
     }

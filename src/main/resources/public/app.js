@@ -306,6 +306,17 @@
     if (error) error.hidden = true;
   });
 
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    var editor = form.querySelector("[data-items-editor]");
+    var bad = editor ? checkItems(editor) : null;
+    if (!bad) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    bad.focus();
+  }, true);
+
   function syncConfirmName(input) {
     if (!input.form) return;
     var ok = input.value.trim() === (input.getAttribute("data-confirm-name") || "").trim();
@@ -476,7 +487,7 @@
       return;
     }
     var box = btn.closest("[data-csrf]");
-    var article = btn.closest(".tl-comment");
+    var article = btn.closest(".tl-comment, .req-list");
     if (!box || !article) return;
     btn.dataset.saving = "1";
     btn.dataset.dirty = "";
@@ -488,7 +499,7 @@
       if (!ok) toast("折叠状态没保存上，请稍后再试");
       else if (btn.dataset.dirty === "1") saveFold(btn);
     };
-    fetch(btn.getAttribute("data-comment-fold"), {
+    fetch(btn.getAttribute("data-comment-fold") || btn.getAttribute("data-items-fold"), {
       method: "POST",
       body: data,
       credentials: "same-origin",
@@ -496,6 +507,18 @@
       keepalive: true
     }).then(function (res) { finish(res.status === 204); }, function () { finish(false); });
   }
+
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    var btn = t instanceof Element ? t.closest("[data-items-fold]") : null;
+    var list = btn ? btn.closest(".req-list") : null;
+    if (!list) return;
+    var folded = !list.classList.contains("is-folded");
+    list.classList.toggle("is-folded", folded);
+    btn.setAttribute("aria-expanded", folded ? "false" : "true");
+    btn.setAttribute("title", folded ? "展开" : "收起");
+    saveFold(btn);
+  });
 
   function setFold(article, folded) {
     var btn = article.querySelector("[data-comment-fold]");
@@ -561,6 +584,348 @@
     if (t.form && t.form.requestSubmit) t.form.requestSubmit();
   });
 
+  function itemRowOf(el) {
+    return el instanceof Element ? el.closest("[data-item-row]") : null;
+  }
+
+  function itemInput(row) {
+    return row ? row.querySelector('input[name="item_text"]') : null;
+  }
+
+  function focusEnd(input) {
+    if (!input) return;
+    input.focus();
+    var n = input.value.length;
+    input.setSelectionRange(n, n);
+  }
+
+  var itemSeq = 0;
+
+  function keyRow(row) {
+    var ref = row.querySelector('input[name="item_ref"]');
+    if (!ref || ref.value) return;
+    var key = "n" + (++itemSeq);
+    ref.value = key;
+    var file = row.querySelector("[data-att-input]");
+    var label = row.querySelector("[data-att-label]");
+    if (file) {
+      file.id = "if_" + key;
+      file.setAttribute("data-att-name", "item_files_" + key);
+    }
+    if (label) label.htmlFor = "if_" + key;
+  }
+
+  function rowHasFiles(row) {
+    var file = row.querySelector("[data-att-input]");
+    return !!row.querySelector("[data-att-saved]") || (!!file && pickedFiles(file).length > 0);
+  }
+
+  function checkItems(editor) {
+    var bad = null;
+    editor.querySelectorAll("[data-item-list] [data-item-row]").forEach(function (row) {
+      var input = itemInput(row);
+      if (!input) return;
+      var flag = input.value.trim() === "" && rowHasFiles(row);
+      input.classList.toggle("is-invalid", flag);
+      if (flag) {
+        input.setAttribute("aria-invalid", "true");
+        input.setAttribute("aria-describedby", "f_items_err");
+      } else {
+        input.removeAttribute("aria-invalid");
+        input.removeAttribute("aria-describedby");
+      }
+      if (flag && !bad) bad = input;
+    });
+    var msg = editor.querySelector("[data-items-error]");
+    if (msg) msg.classList.toggle("d-block", !!bad);
+    return bad;
+  }
+
+  function recheckItems(editor) {
+    if (editor && editor.querySelector("[data-items-error].d-block")) checkItems(editor);
+  }
+
+  function addItemRow(editor, after, text) {
+    var tpl = editor.querySelector("template[data-item-template]");
+    var list = editor.querySelector("[data-item-list]");
+    if (!tpl || !list) return null;
+    var row = tpl.content.firstElementChild.cloneNode(true);
+    keyRow(row);
+    var input = itemInput(row);
+    if (text) input.value = text;
+    if (after && after.parentNode === list) list.insertBefore(row, after.nextSibling);
+    else list.appendChild(row);
+    return input;
+  }
+
+  function removeItemRow(row, back) {
+    var editor = row.closest("[data-items-editor]");
+    var prev = row.previousElementSibling;
+    var next = row.nextElementSibling;
+    row.parentNode.removeChild(row);
+    var target = back ? (prev || next) : (next || prev);
+    if (target) {
+      focusEnd(itemInput(target));
+    } else if (editor) {
+      var add = editor.querySelector("[data-item-add]");
+      if (add) add.focus();
+    }
+    recheckItems(editor);
+  }
+
+  function itemLines(text) {
+    return text.replace(/\r/g, "").split("\n").map(function (s) {
+      return s.replace(/^\s*(?:(?:[-*+]\s+|[•·]\s*)(?:\[[ xX]\]\s+)?|\[[ xX]\]\s+|\d{1,3}[.)]\s+|\d{1,3}[、．]\s*|[（(]\d{1,3}[)）]\s*)/, "").trim();
+    }).filter(function (s) { return s !== ""; });
+  }
+
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (!(t instanceof Element)) return;
+    var add = t.closest("[data-item-add]");
+    if (add) {
+      var editor = add.closest("[data-items-editor]");
+      if (editor) focusEnd(addItemRow(editor, null, ""));
+      return;
+    }
+    var del = t.closest("[data-item-del]");
+    var row = del ? itemRowOf(del) : null;
+    if (row) removeItemRow(row, false);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement) || t.name !== "item_text") return;
+    if (event.isComposing || event.keyCode === 229) return;
+    var row = itemRowOf(t);
+    var editor = row ? row.closest("[data-items-editor]") : null;
+    if (!editor) return;
+    if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      focusEnd(addItemRow(editor, row, ""));
+    } else if (event.key === "Backspace" && t.value === "" && !event.repeat && !rowHasFiles(row)) {
+      event.preventDefault();
+      removeItemRow(row, true);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      var sib = event.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+      if (sib) {
+        event.preventDefault();
+        focusEnd(itemInput(sib));
+      }
+    }
+  });
+
+  document.addEventListener("paste", function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement) || t.name !== "item_text") return;
+    var text = event.clipboardData ? event.clipboardData.getData("text") : "";
+    if (text.indexOf("\n") < 0) return;
+    var row = itemRowOf(t);
+    var editor = row ? row.closest("[data-items-editor]") : null;
+    if (!editor) return;
+    event.preventDefault();
+    var lines = itemLines(text);
+    if (!lines.length) return;
+    var last = t;
+    if (t.value.trim() === "") t.value = lines.shift();
+    lines.forEach(function (line) { last = addItemRow(editor, itemRowOf(last), line) || last; });
+    focusEnd(last);
+  });
+
+  document.addEventListener("input", function (event) {
+    var t = event.target;
+    if (t instanceof HTMLInputElement && t.name === "item_text") recheckItems(t.closest("[data-items-editor]"));
+  });
+
+  var canSetFiles = (function () {
+    try {
+      return typeof DataTransfer === "function" && !!new DataTransfer().files;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  function sizeText(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+    return (n / 1073741824).toFixed(2) + " GB";
+  }
+
+  function attScope(el) {
+    return el instanceof Element ? el.closest("[data-att-scope]") : null;
+  }
+
+  function pickedFiles(input) {
+    return input._hubFiles || [];
+  }
+
+  function syncAttName(input) {
+    var name = input.getAttribute("data-att-name");
+    if (name && pickedFiles(input).length) input.name = name;
+    else input.removeAttribute("name");
+  }
+
+  function sameFile(a, b) {
+    return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+  }
+
+  function newChip(f, i) {
+    var chip = document.createElement("span");
+    chip.className = "file-chip is-new";
+    chip.setAttribute("data-att-new", String(i));
+    var body = document.createElement("span");
+    body.className = "file-chip-link";
+    var icon = document.createElement("i");
+    icon.className = "bi bi-paperclip";
+    icon.setAttribute("aria-hidden", "true");
+    var name = document.createElement("span");
+    name.className = "file-chip-name";
+    name.textContent = f.name;
+    var size = document.createElement("span");
+    size.className = "file-chip-size";
+    size.textContent = sizeText(f.size);
+    body.appendChild(icon);
+    body.appendChild(name);
+    body.appendChild(size);
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "file-chip-del";
+    del.title = "移除";
+    del.setAttribute("aria-label", "移除附件：" + f.name);
+    del.setAttribute("data-att-unpick", String(i));
+    var x = document.createElement("i");
+    x.className = "bi bi-x-lg";
+    x.setAttribute("aria-hidden", "true");
+    del.appendChild(x);
+    chip.appendChild(body);
+    chip.appendChild(del);
+    return chip;
+  }
+
+  function drawPicked(input) {
+    var scope = attScope(input);
+    var list = scope ? scope.querySelector("[data-att-list]") : null;
+    if (!list) return;
+    list.querySelectorAll("[data-att-new]").forEach(function (c) { c.parentNode.removeChild(c); });
+    pickedFiles(input).forEach(function (f, i) { list.appendChild(newChip(f, i)); });
+    list.hidden = !list.querySelector(".file-chip");
+  }
+
+  function setPicked(input, files) {
+    input._hubFiles = files;
+    if (canSetFiles) {
+      var dt = new DataTransfer();
+      files.forEach(function (f) { dt.items.add(f); });
+      input.files = dt.files;
+    } else if (!files.length) {
+      input.value = "";
+    }
+    syncAttName(input);
+    drawPicked(input);
+  }
+
+  function pickFiles(input) {
+    var max = parseInt(input.getAttribute("data-max-bytes"), 10) || 0;
+    var fresh = Array.prototype.slice.call(input.files || []);
+    var keep = canSetFiles ? pickedFiles(input).slice() : [];
+    var big = [];
+    fresh.forEach(function (f) {
+      if (max && f.size > max) big.push(f.name);
+      else if (f.size > 0 && !keep.some(function (g) { return sameFile(g, f); })) keep.push(f);
+    });
+    if (big.length) {
+      toast("「" + big.join("」「") + "」超过单个 " + sizeText(max) + " 的上限，没有加进来");
+      if (!canSetFiles) keep = [];
+    }
+    setPicked(input, keep);
+  }
+
+  function focusChip(list, index, fallback) {
+    var dels = list ? list.querySelectorAll(".file-chip-del") : [];
+    var target = dels.length ? dels[Math.min(Math.max(index, 0), dels.length - 1)] : fallback;
+    if (target) target.focus();
+  }
+
+  document.addEventListener("change", function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement) || t.type !== "file" || !t.hasAttribute("data-att-input")) return;
+    pickFiles(t);
+    recheckItems(t.closest("[data-items-editor]"));
+  });
+
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (!(t instanceof Element)) return;
+    var btn = t.closest("[data-att-unpick], [data-att-drop]");
+    var scope = btn ? attScope(btn) : null;
+    if (!scope) return;
+    var list = scope.querySelector("[data-att-list]");
+    var input = scope.querySelector("[data-att-input]");
+    var index = list ? Array.prototype.indexOf.call(list.querySelectorAll(".file-chip-del"), btn) : 0;
+    if (btn.hasAttribute("data-att-unpick")) {
+      var at = parseInt(btn.getAttribute("data-att-unpick"), 10);
+      if (input) setPicked(input, canSetFiles ? pickedFiles(input).filter(function (f, j) { return j !== at; }) : []);
+    } else {
+      var chip = btn.closest("[data-att-saved]");
+      if (!chip) return;
+      var gone = document.createElement("input");
+      gone.type = "hidden";
+      gone.name = "att_remove";
+      gone.value = chip.getAttribute("data-att-saved");
+      scope.appendChild(gone);
+      chip.parentNode.removeChild(chip);
+      if (list) list.hidden = !list.querySelector(".file-chip");
+    }
+    focusChip(list, index, input);
+    recheckItems(scope.closest("[data-items-editor]"));
+  });
+
+  function markItem(input) {
+    var row = input.closest(".req-item");
+    if (row) row.classList.toggle("is-checked", input.checked);
+  }
+
+  function saveItem(input) {
+    if (input.dataset.saving === "1") {
+      input.dataset.dirty = "1";
+      return;
+    }
+    var box = input.closest("[data-csrf]");
+    if (!box) return;
+    var want = input.checked;
+    input.dataset.saving = "1";
+    input.dataset.dirty = "";
+    var data = new URLSearchParams();
+    data.append("_csrf", box.getAttribute("data-csrf"));
+    data.append("value", want ? "1" : "0");
+    var finish = function (ok) {
+      input.dataset.saving = "";
+      if (!ok) {
+        input.checked = input.dataset.saved === "1";
+        markItem(input);
+        toast("勾选没保存上，请稍后再试");
+        return;
+      }
+      input.dataset.saved = want ? "1" : "0";
+      if (input.dataset.dirty === "1" && input.checked !== want) saveItem(input);
+    };
+    fetch(input.getAttribute("data-item-toggle"), {
+      method: "POST",
+      body: data,
+      credentials: "same-origin",
+      cache: "no-store",
+      keepalive: true
+    }).then(function (res) { finish(res.status === 204); }, function () { finish(false); });
+  }
+
+  document.addEventListener("change", function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement) || !t.hasAttribute("data-item-toggle")) return;
+    markItem(t);
+    saveItem(t);
+  });
+
   function autoHide(el) {
     var ms = parseInt(el.getAttribute("data-autohide"), 10);
     if (!ms || el.dataset.autohideOn === "1") return;
@@ -586,6 +951,7 @@
   function init() {
     document.querySelectorAll("a[href]").forEach(hideHref);
     document.querySelectorAll("[data-autohide]").forEach(autoHide);
+    document.querySelectorAll("[data-att-input]").forEach(syncAttName);
   }
 
   function boot() {

@@ -62,6 +62,8 @@ object ProjectRepo {
         c.exec("delete from release_assets where release_id in ($releases)", id)
         c.exec("delete from releases where project_id = ?", id)
         c.exec("delete from requirement_labels where requirement_id in ($reqs)", id)
+        c.exec("delete from item_folds where requirement_id in ($reqs)", id)
+        c.exec("delete from req_items where requirement_id in ($reqs)", id)
         c.exec("delete from requirements where project_id = ?", id)
         c.exec("delete from project_members where project_id = ?", id)
         c.exec("delete from projects where id = ?", id)

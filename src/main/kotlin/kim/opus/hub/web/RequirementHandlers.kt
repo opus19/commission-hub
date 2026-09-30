@@ -3,6 +3,7 @@ package kim.opus.hub.web
 import io.javalin.http.BadRequestResponse
 import io.javalin.http.Context
 import io.javalin.http.NotFoundResponse
+import io.javalin.http.UploadedFile
 import kim.opus.hub.data.*
 import kim.opus.hub.model.*
 import kim.opus.hub.view.*
@@ -11,31 +12,94 @@ object RequirementHandlers {
 
     private val steps = listOf(ReqStatus.TODO to "待开发", ReqStatus.TESTING to "待测试", ReqStatus.ARCHIVED to "归档")
 
-    private class ReqForm(val title: String, val body: String, val priority: Int, val wanted: String)
+    private class ReqForm(
+        val title: String,
+        val body: String,
+        val priority: Int,
+        val wanted: String,
+        val items: List<ItemHandlers.Row>,
+        val bodyFiles: List<UploadedFile>,
+        val removed: Set<Long>
+    ) {
+        val hasFiles: Boolean get() = bodyFiles.isNotEmpty() || items.any { it.files.isNotEmpty() }
+    }
 
     private fun readForm(ctx: Context): ReqForm = ReqForm(
         title = ctx.formParam("title")?.trim()?.take(200).orEmpty(),
         body = ctx.formParam("body")?.replace("\r\n", "\n")?.trim()?.take(20000).orEmpty(),
         priority = Priority.of(ctx.formParam("priority")?.toIntOrNull() ?: Priority.NORMAL.level).level,
-        wanted = ctx.formParam("wanted_at")?.trim()?.take(40).orEmpty()
+        wanted = ctx.formParam("wanted_at")?.trim()?.take(40).orEmpty(),
+        items = ItemHandlers.readForm(ctx),
+        bodyFiles = ctx.uploadedFiles("body_files").filter { it.size() > 0 },
+        removed = ctx.formParams("att_remove").mapNotNull { it.trim().toLongOrNull() }.toSet()
     )
 
-    private fun formOf(r: Requirement): ReqForm =
-        ReqForm(r.title, r.body.orEmpty(), r.priority, Wanted.full(r.wantedAt).orEmpty())
+    private fun blankForm(): ReqForm = ReqForm("", "", Priority.NORMAL.level, "", emptyList(), emptyList(), emptySet())
 
-    private fun check(f: ReqForm): Pair<String?, Map<String, String>> {
+    private fun formOf(r: Requirement): ReqForm = ReqForm(
+        r.title,
+        r.body.orEmpty(),
+        r.priority,
+        Wanted.full(r.wantedAt).orEmpty(),
+        ItemRepo.forRequirement(r.id).map { ItemHandlers.Row(it.id, it.body, emptyList()) },
+        emptyList(),
+        emptySet()
+    )
+
+    private fun check(f: ReqForm, saved: List<Attachment>): Pair<String?, Map<String, String>> {
         val errors = LinkedHashMap<String, String>()
         if (f.title.isEmpty()) errors["title"] = "标题不能为空"
         val (wanted, wantedErr) = Wanted.readInput(f.wanted)
         if (wantedErr != null) errors["wanted_at"] = wantedErr
+        val withFiles = saved.filter { it.id !in f.removed }.mapNotNull { it.itemId }.toSet()
+        if (f.items.any { it.body.isEmpty() && (it.files.isNotEmpty() || (it.id != null && it.id in withFiles)) }) {
+            errors["items"] = ItemHandlers.NEED_TEXT
+        }
+        if (errors.isNotEmpty() && f.hasFiles) errors["files"] = "刚才选的附件还没上传，请重新选一次"
         return wanted to errors
+    }
+
+    private fun rowsToSave(f: ReqForm): List<ItemHandlers.Row> = f.items.filter { it.body.isNotEmpty() }.take(ItemHandlers.MAX_ITEMS)
+
+    private fun store(f: ReqForm, rows: List<ItemHandlers.Row>): FileChanges {
+        val done = ArrayList<NewFile>()
+        try {
+            val body = Uploads.storeAll(f.bodyFiles).also { done.addAll(it) }
+            val items = rows.map { row -> Uploads.storeAll(row.files).also { done.addAll(it) } }
+            return FileChanges(body, items, f.removed)
+        } catch (ex: Exception) {
+            done.forEach { Uploads.deleteQuietly(it.storedName) }
+            throw ex
+        }
     }
 
     private fun readOnlyReason(view: RequirementView): String? =
         if (view.readOnly) "这条需求已归档，现在是只读的" else null
 
-    private fun form(ctx: Context, action: String, submit: String, cancelHref: String, f: ReqForm, projectId: Long?, errors: Map<String, String>): String {
+    private fun bodyField(value: String, files: List<Attachment>, error: String?): String = """
+<div class="mb-3">
+  <label class="form-label" for="f_body">具体需求</label>
+  <div class="composer req-body-box" data-att-scope>
+    <textarea class="form-control composer-input" id="f_body" name="body" rows="8">${e(value)}</textarea>
+    <div class="att-list" data-att-list${if (files.isEmpty()) " hidden" else ""}>${files.joinToString("") { savedFileChip(it) }}</div>
+    <div class="composer-bar">
+      <input class="composer-file-input" id="f_body_files" type="file" name="body_files" data-att-name="body_files" multiple data-att-input data-max-bytes="${Uploads.limitBytes}">
+      <label class="composer-attach" for="f_body_files"><i class="bi bi-paperclip me-1" aria-hidden="true"></i>添加附件</label>
+    </div>
+  </div>
+  ${if (error == null) "" else """<div class="invalid-feedback d-block">${e(error)}</div>"""}
+</div>"""
+
+    private fun form(ctx: Context, action: String, submit: String, cancelHref: String, f: ReqForm, projectId: Long?, errors: Map<String, String>, saved: List<Attachment>): String {
         val projectField = if (projectId == null) "" else """<input type="hidden" name="project_id" value="$projectId">"""
+        val live = saved.filter { it.id !in f.removed }
+        val byItem = live.filter { it.itemId != null }.groupBy { it.itemId!! }
+        val rows = f.items.mapIndexedNotNull { i, row ->
+            val files = row.id?.let { byItem[it] }.orEmpty()
+            if (row.body.isEmpty() && row.files.isEmpty() && files.isEmpty()) null
+            else ItemHandlers.EditRow(row.id?.toString() ?: "r$i", row.body, files, row.body.isEmpty())
+        }
+        val removedFields = saved.filter { it.id in f.removed }.joinToString("") { """<input type="hidden" name="att_remove" value="${it.id}">""" }
         val first = errors.keys.firstOrNull()
         fun state(key: String, id: String): String = buildString {
             if (key in errors) append(""" aria-invalid="true" aria-describedby="${id}_err"""")
@@ -45,15 +109,17 @@ object RequirementHandlers {
         fun feedback(key: String, id: String): String =
             errors[key]?.let { """<div class="invalid-feedback" id="${id}_err">${e(it)}</div>""" } ?: ""
         return """
-<form method="post" action="${e(action)}" novalidate>
+<form method="post" action="${e(action)}" enctype="multipart/form-data" novalidate>
   ${csrfInput(ctx)}
   $projectField
+  $removedFields
   <div class="mb-3">
     <label class="form-label" for="f_title">标题 <span class="text-danger">*</span></label>
     <input class="${cls("title")}" id="f_title" type="text" name="title" value="${e(f.title)}" placeholder="一句话说清要做什么" maxlength="200" autocomplete="off"${state("title", "f_title")}>
     ${feedback("title", "f_title")}
   </div>
-  ${areaField("具体需求", "body", f.body, rows = 8)}
+  ${bodyField(f.body, live.filter { it.itemId == null }, errors["files"])}
+  ${ItemHandlers.editor(rows, errors["items"], if (first == "items") rows.indexOfFirst { it.invalid } else -1)}
   <div class="row g-3">
     <div class="col-sm-6">${selectField("优先级", "priority", Priority.entries.map { it.level.toString() to it.label }, f.priority.toString())}</div>
     <div class="col-sm-6">
@@ -74,14 +140,14 @@ object RequirementHandlers {
     private fun renderNew(ctx: Context, project: Project, f: ReqForm, errors: Map<String, String>) {
         val main = """
 <h3 class="mb-4">新建需求</h3>
-""" + form(ctx, "/requirements", "创建需求", "/projects/${project.id}", f, project.id, errors)
+""" + form(ctx, "/requirements", "创建需求", "/projects/${project.id}", f, project.id, errors, emptyList())
         ctx.html(page(ctx, "新建需求", "projects", main, back = "/projects/${project.id}" to project.name))
     }
 
-    private fun renderEdit(ctx: Context, r: Requirement, f: ReqForm, errors: Map<String, String>) {
+    private fun renderEdit(ctx: Context, r: Requirement, f: ReqForm, errors: Map<String, String>, saved: List<Attachment>) {
         val main = """
 <h3 class="mb-4">编辑需求</h3>
-""" + form(ctx, "/requirements/${r.id}", "保存修改", "/requirements/${r.id}", f, null, errors)
+""" + form(ctx, "/requirements/${r.id}", "保存修改", "/requirements/${r.id}", f, null, errors, saved)
         ctx.html(page(ctx, "编辑需求", "projects", main, back = "/requirements/${r.id}" to r.title))
     }
 
@@ -93,7 +159,7 @@ object RequirementHandlers {
             return
         }
         val project = Access.project(user, projectId)
-        renderNew(ctx, project, ReqForm("", "", Priority.NORMAL.level, ""), emptyMap())
+        renderNew(ctx, project, blankForm(), emptyMap())
     }
 
     fun create(ctx: Context) {
@@ -101,21 +167,30 @@ object RequirementHandlers {
         val projectId = ctx.formParam("project_id")?.toLongOrNull() ?: throw NotFoundResponse("项目不存在")
         val project = Access.project(user, projectId)
         val f = readForm(ctx)
-        val (wanted, errors) = check(f)
+        val (wanted, errors) = check(f, emptyList())
         if (errors.isNotEmpty()) {
             ctx.status(400)
             renderNew(ctx, project, f, errors)
             return
         }
-        val id = ReqRepo.create(
-            projectId = project.id,
-            title = f.title,
-            body = f.body.ifEmpty { null },
-            status = ReqStatus.TODO,
-            priority = f.priority,
-            wantedAt = wanted,
-            actor = user.id
-        )
+        val rows = rowsToSave(f)
+        val files = store(f, rows)
+        val id = try {
+            ReqRepo.create(
+                projectId = project.id,
+                title = f.title,
+                body = f.body.ifEmpty { null },
+                status = ReqStatus.TODO,
+                priority = f.priority,
+                wantedAt = wanted,
+                items = rows.map { ItemInput(it.id, it.body) },
+                files = files,
+                actor = user.id
+            )
+        } catch (ex: Exception) {
+            files.stored.forEach { Uploads.deleteQuietly(it.storedName) }
+            throw ex
+        }
         ctx.flashOk("需求已创建")
         ctx.go("/requirements/$id")
     }
@@ -130,7 +205,7 @@ object RequirementHandlers {
             ctx.go("/requirements/${r.id}")
             return
         }
-        renderEdit(ctx, r, formOf(r), emptyMap())
+        renderEdit(ctx, r, formOf(r), emptyMap(), AttachmentRepo.forRequirement(r.id))
     }
 
     fun update(ctx: Context) {
@@ -139,22 +214,43 @@ object RequirementHandlers {
         Access.writable(view)
         val r = view.requirement
         val f = readForm(ctx)
-        val (wanted, errors) = check(f)
+        val saved = AttachmentRepo.forRequirement(r.id)
+        val (wanted, errors) = check(f, saved)
         if (errors.isNotEmpty()) {
             ctx.status(400)
-            renderEdit(ctx, r, f, errors)
+            renderEdit(ctx, r, f, errors, saved)
             return
         }
-        ReqRepo.update(
-            id = r.id,
-            title = f.title,
-            body = f.body.ifEmpty { null },
-            priority = f.priority,
-            wantedAt = wanted,
-            actor = user.id
-        )
+        val rows = rowsToSave(f)
+        val files = store(f, rows)
+        val gone = try {
+            ReqRepo.update(
+                id = r.id,
+                title = f.title,
+                body = f.body.ifEmpty { null },
+                priority = f.priority,
+                wantedAt = wanted,
+                items = rows.map { ItemInput(it.id, it.body) },
+                files = files,
+                actor = user.id
+            )
+        } catch (ex: Exception) {
+            files.stored.forEach { Uploads.deleteQuietly(it.storedName) }
+            throw ex
+        }
+        gone.forEach { Uploads.deleteQuietly(it) }
         ctx.flashOk("需求已保存")
         ctx.go("/requirements/${r.id}")
+    }
+
+    private fun bodyFiles(ctx: Context, files: List<Attachment>, spaced: Boolean): String {
+        if (files.isEmpty()) return ""
+        val (pictures, others) = files.partition { imageType(it.originalName) != null }
+        val gallery = if (pictures.isEmpty()) "" else
+            """<div class="tl-images">${pictures.joinToString("") { CommentHandlers.imageItem(ctx, false, it) }}</div>"""
+        val chips = if (others.isEmpty()) "" else
+            """<div class="tl-files">${others.joinToString("") { CommentHandlers.fileChip(ctx, false, it) }}</div>"""
+        return """<div class="req-files${if (spaced) " mt-3" else ""}">$gallery$chips</div>"""
     }
 
     private fun clientActionBox(ctx: Context, r: Requirement, targets: List<ReqStatus>): String {
@@ -188,6 +284,11 @@ object RequirementHandlers {
         val r = view.requirement
         val comments = CommentRepo.forRequirement(r.id)
         val versions = VersionRepo.forRequirement(r.id)
+        val items = ItemRepo.forRequirement(r.id)
+        val saved = AttachmentRepo.forRequirement(r.id)
+        val attached = saved.filter { it.itemId == null }
+        val itemFiles = saved.filter { it.itemId != null }.groupBy { it.itemId!! }
+        val hasBody = !r.body.isNullOrBlank()
         val targets = Transitions.allowed(user, view)
 
         val edit = if (view.readOnly) "" else
@@ -201,7 +302,9 @@ object RequirementHandlers {
     $edit
   </div>
   ${if (!user.isAdmin) clientActionBox(ctx, r, targets) else ""}
-  ${if (r.body.isNullOrBlank()) "" else """<article class="fmt text-break text-wrap last-p">${richText(r.body)}</article>"""}
+  ${if (!hasBody) "" else """<article class="fmt text-break text-wrap last-p">${Markdown.render(r.body.orEmpty())}</article>"""}
+  ${bodyFiles(ctx, attached, spaced = hasBody)}
+  ${ItemHandlers.section(ctx, user, view, items, itemFiles, spaced = hasBody || attached.isNotEmpty())}
 </div>"""
 
         val main = question + CommentHandlers.section(ctx, user, view, comments)

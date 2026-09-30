@@ -54,6 +54,7 @@ object UserRepo {
         c.exec("update users set active = 0 where id = ? and role = ?", user.id, ROLE_CLIENT)
         c.exec("delete from project_members where user_id = ?", user.id)
         c.exec("delete from comment_folds where user_id = ?", user.id)
+        c.exec("delete from item_folds where user_id = ?", user.id)
         Audit.add(c, actor, "user", user.id, "removed", "账号 " + user.username)
     }
 }

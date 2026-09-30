@@ -57,9 +57,12 @@ object Routes {
         post("/requirements/{id}/status") { ctx -> RequirementHandlers.changeStatus(ctx) }
         post("/requirements/{id}/comments") { ctx -> CommentHandlers.create(ctx) }
         post("/requirements/{id}/versions") { ctx -> VersionHandlers.upload(ctx) }
+        post("/requirements/{id}/items/fold") { ctx -> ItemHandlers.fold(ctx) }
         post("/comments/{id}") { ctx -> CommentHandlers.update(ctx) }
         post("/comments/{id}/delete") { ctx -> CommentHandlers.delete(ctx) }
         post("/comments/{id}/fold") { ctx -> CommentHandlers.fold(ctx) }
+        post("/items/{id}/done") { ctx -> ItemHandlers.done(ctx) }
+        post("/items/{id}/tested") { ctx -> ItemHandlers.tested(ctx) }
 
         post("/versions/{id}/delete") { ctx -> VersionHandlers.delete(ctx) }
         r.get("/downloads/{id}") { ctx -> VersionHandlers.download(ctx) }

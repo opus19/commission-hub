@@ -69,6 +69,8 @@ object ReqRepo {
         status: ReqStatus,
         priority: Int,
         wantedAt: String?,
+        items: List<ItemInput>,
+        files: FileChanges,
         actor: Long
     ): Long {
         seqLock.lock()
@@ -83,7 +85,9 @@ object ReqRepo {
                     """.trimIndent(),
                     projectId, seq, title, body, status.code, priority, actor, stamp, stamp, wantedAt
                 )
+                val saved = ItemRepo.replace(c, id, items)
                 Audit.add(c, actor, "requirement", id, "created", title)
+                attach(c, id, saved.ids, files, actor)
                 id
             }
         } finally {
@@ -91,12 +95,36 @@ object ReqRepo {
         }
     }
 
-    fun update(id: Long, title: String, body: String?, priority: Int, wantedAt: String?, actor: Long) = Db.tx { c ->
+    fun update(
+        id: Long,
+        title: String,
+        body: String?,
+        priority: Int,
+        wantedAt: String?,
+        items: List<ItemInput>,
+        files: FileChanges,
+        actor: Long
+    ): List<String> = Db.tx { c ->
         c.exec(
             "update requirements set title = ?, body = ?, priority = ?, wanted_at = ?, updated_at = ? where id = ?",
             title, body, priority, wantedAt, nowIso(), id
         )
+        val removed = AttachmentRepo.remove(c, id, files.removed, actor)
+        val saved = ItemRepo.replace(c, id, items)
         Audit.add(c, actor, "requirement", id, "edited", title)
+        attach(c, id, saved.ids, files, actor)
+        removed + saved.dropped
+    }
+
+    private fun attach(c: Connection, id: Long, itemIds: List<Long>, files: FileChanges, actor: Long) {
+        val stamp = nowIso()
+        AttachmentRepo.add(c, id, null, actor, files.body, stamp)
+        files.items.forEachIndexed { i, list ->
+            val itemId = itemIds.getOrNull(i) ?: return@forEachIndexed
+            AttachmentRepo.add(c, id, itemId, actor, list, stamp)
+        }
+        val count = files.stored.size
+        if (count > 0) Audit.add(c, actor, "requirement", id, "attached", "$count 个附件")
     }
 
     fun setStatus(id: Long, from: ReqStatus, to: ReqStatus, actor: Long, note: String?) = Db.tx { c ->

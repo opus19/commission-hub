@@ -13,6 +13,13 @@ enum class ReqStatus(val code: String, val label: String, val icon: String) {
     }
 }
 
+enum class ItemMark(val path: String, val label: String) {
+    DONE("done", "已修"),
+    TESTED("tested", "已测");
+
+    fun of(item: ReqItem): Boolean = if (this == DONE) item.done else item.tested
+}
+
 enum class Priority(val level: Int, val label: String, val longLabel: String, val icon: String) {
     HIGH(1, "高", "高优先级", "bi-reception-3"),
     NORMAL(2, "中", "中优先级", "bi-reception-2"),

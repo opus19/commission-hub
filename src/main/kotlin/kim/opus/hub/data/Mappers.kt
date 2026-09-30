@@ -33,10 +33,20 @@ internal fun mapRequirement(rs: ResultSet) = Requirement(
     wantedAt = rs.getString("wanted_at")
 )
 
+internal fun mapItem(rs: ResultSet) = ReqItem(
+    id = rs.getLong("id"),
+    requirementId = rs.getLong("requirement_id"),
+    position = rs.getInt("position"),
+    body = rs.getString("body"),
+    doneAt = rs.getString("done_at"),
+    testedAt = rs.getString("tested_at")
+)
+
 internal fun mapAttachment(rs: ResultSet) = Attachment(
     id = rs.getLong("id"),
     requirementId = rs.longOrNull("requirement_id"),
     commentId = rs.longOrNull("comment_id"),
+    itemId = rs.longOrNull("item_id"),
     userId = rs.getLong("user_id"),
     originalName = rs.getString("original_name"),
     storedName = rs.getString("stored_name"),

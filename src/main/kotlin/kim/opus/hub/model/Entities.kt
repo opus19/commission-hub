@@ -44,6 +44,20 @@ data class Requirement(
     val isOverdue: Boolean get() = Wanted.overdue(wantedAt, statusEnum)
 }
 
+data class ReqItem(
+    val id: Long,
+    val requirementId: Long,
+    val position: Int,
+    val body: String,
+    val doneAt: String?,
+    val testedAt: String?
+) {
+    val done: Boolean get() = doneAt != null
+    val tested: Boolean get() = testedAt != null
+}
+
+data class ItemInput(val id: Long?, val body: String)
+
 data class RequirementView(
     val requirement: Requirement,
     val projectName: String
@@ -69,6 +83,14 @@ data class NewFile(
     val contentType: String?
 )
 
+data class FileChanges(
+    val body: List<NewFile>,
+    val items: List<List<NewFile>>,
+    val removed: Set<Long>
+) {
+    val stored: List<NewFile> get() = body + items.flatten()
+}
+
 data class VersionFile(
     val id: Long,
     val versionId: Long,
@@ -91,6 +113,7 @@ data class Attachment(
     val id: Long,
     val requirementId: Long?,
     val commentId: Long?,
+    val itemId: Long?,
     val userId: Long,
     val originalName: String,
     val storedName: String,

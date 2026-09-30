@@ -77,6 +77,14 @@ fun modalForm(
   </div>
 </div>"""
 
+fun attachmentHref(f: Attachment): String =
+    if (imageType(f.originalName) != null) """href="/attachments/${f.id}/image" target="_blank" rel="noopener"""" else """href="/attachments/${f.id}""""
+
+fun savedFileChip(f: Attachment): String {
+    val name = e(f.originalName)
+    return """<span class="file-chip" data-att-saved="${f.id}"><a class="file-chip-link" ${attachmentHref(f)} title="$name"><i class="bi ${fileIcon(f.originalName)}" aria-hidden="true"></i><span class="file-chip-name">$name</span><span class="file-chip-size">${e(formatSize(f.sizeBytes))}</span></a><button class="file-chip-del" type="button" data-att-drop title="移除" aria-label="移除附件：$name"><i class="bi bi-x-lg" aria-hidden="true"></i></button></span>"""
+}
+
 fun imageType(name: String): String? = when (name.substringAfterLast('.', "").lowercase()) {
     "png" -> "image/png"
     "jpg", "jpeg" -> "image/jpeg"

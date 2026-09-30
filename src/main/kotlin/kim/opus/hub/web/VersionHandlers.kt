@@ -37,9 +37,8 @@ object VersionHandlers {
   <label class="form-check-label" for="uv_mark">上传后改成「待测试」让客户验收</label>
 </div>"""
         val body = """
-<label class="form-label" for="uv_files">文件</label>
+<label class="visually-hidden" for="uv_files">文件</label>
 <input class="form-control" id="uv_files" type="file" name="files" multiple required>
-<div class="form-text">可以一次选多个，单个最大 ${e(formatSize(Uploads.limitBytes))}</div>
 $mark"""
         return modalForm(ctx, "uploadVersion", "上传新版本", "/requirements/${r.id}/versions", body, "上传", multipart = true)
     }

@@ -72,19 +72,19 @@ $tail"""
     <span class="text-secondary">${timeTag(cm.createdAt)}</span>
     $tools
   </header>
-  ${if (cm.body.isNotBlank()) """<div class="tl-comment-body fmt last-p text-break">${richText(cm.body, "")}</div>""" else ""}
+  ${if (cm.body.isNotBlank()) """<div class="tl-comment-body fmt last-p text-break">${Markdown.render(cm.body)}</div>""" else ""}
   $form
   $gallery
   $files
 </article>"""
     }
 
-    private fun imageItem(ctx: Context, canDelete: Boolean, f: Attachment): String {
+    fun imageItem(ctx: Context, canDelete: Boolean, f: Attachment): String {
         val name = e(f.originalName)
         return """<figure class="tl-image"><a class="tl-image-link" href="/attachments/${f.id}/image" target="_blank" rel="noopener" title="查看原图"><img src="/attachments/${f.id}/image" alt="$name" loading="lazy"></a><figcaption class="tl-image-cap">${fileChip(ctx, canDelete, f)}</figcaption></figure>"""
     }
 
-    private fun fileChip(ctx: Context, canDelete: Boolean, f: Attachment): String {
+    fun fileChip(ctx: Context, canDelete: Boolean, f: Attachment): String {
         val name = e(f.originalName)
         val del = if (!canDelete) "" else """<form method="post" action="/attachments/${f.id}/delete" class="file-chip-form" data-confirm="删除附件「$name」？">${csrfInput(ctx)}<button class="file-chip-del" type="submit" title="删除" aria-label="删除附件：$name"><i class="bi bi-x-lg"></i></button></form>"""
         return """<span class="file-chip"><a class="file-chip-link" href="/attachments/${f.id}" title="$name"><i class="bi ${fileIcon(f.originalName)}"></i><span class="file-chip-name">$name</span><span class="file-chip-size">${e(formatSize(f.sizeBytes))}</span></a>$del</span>"""
@@ -101,7 +101,6 @@ $tail"""
     <div class="composer-bar">
       <input class="composer-file-input" id="c_files" type="file" name="files" multiple data-file-list="#c_file_names">
       <label class="composer-attach" for="c_files"><i class="bi bi-paperclip me-1"></i>添加附件</label>
-      <span class="small text-secondary">单个最大 ${e(formatSize(Uploads.limitBytes))}</span>
       <button class="btn btn-primary btn-sm ms-auto" type="submit"><i class="bi bi-send me-1"></i>发送</button>
     </div>
   </form>
