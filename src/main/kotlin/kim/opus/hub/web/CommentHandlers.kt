@@ -72,7 +72,7 @@ $tail"""
     <span class="text-secondary">${timeTag(cm.createdAt)}</span>
     $tools
   </header>
-  ${if (cm.body.isNotBlank()) """<div class="tl-comment-body fmt last-p text-break">${Markdown.render(cm.body)}</div>""" else ""}
+  ${if (cm.body.isNotBlank()) """<div class="tl-comment-body text-break">${PlainText.render(cm.body)}</div>""" else ""}
   $form
   $gallery
   $files
