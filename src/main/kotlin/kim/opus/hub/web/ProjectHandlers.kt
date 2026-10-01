@@ -68,7 +68,7 @@ ${if (user.isAdmin) newProjectModal(ctx) else ""}
 <div class="danger-zone mt-4">
   <div class="min-w-0">
     <div class="danger-zone-title">删除项目</div>
-    <div class="danger-zone-text">项目里的需求、补充信息、附件和版本会一起永久删除</div>
+    <div class="danger-zone-text">项目里的需求、补充信息、附件和构建会一起永久删除</div>
   </div>
   <button class="btn btn-sm btn-outline-danger flex-shrink-0" type="button" data-island-modal="#deleteProject">删除项目</button>
 </div>""",

@@ -44,20 +44,21 @@ object ProjectRepo {
         val id = project.id
         val reqs = "select id from requirements where project_id = ?"
         val comments = "select id from comments where requirement_id in ($reqs)"
-        val versions = "select id from req_versions where requirement_id in ($reqs)"
+        val builds = "select id from builds where project_id = ?"
         val releases = "select id from releases where project_id = ?"
         val stored = c.rows(
             """
             select stored_name from attachments where requirement_id in ($reqs) or comment_id in ($comments)
-            union select stored_name from req_version_files where version_id in ($versions)
+            union select stored_name from build_files where build_id in ($builds)
             union select stored_name from release_assets where release_id in ($releases)
             """.trimIndent(),
             id, id, id, id
         ) { rs -> rs.getString(1) }
         c.exec("delete from attachments where requirement_id in ($reqs) or comment_id in ($comments)", id, id)
         c.exec("delete from comments where requirement_id in ($reqs)", id)
-        c.exec("delete from req_version_files where version_id in ($versions)", id)
-        c.exec("delete from req_versions where requirement_id in ($reqs)", id)
+        c.exec("delete from build_requirements where build_id in ($builds)", id)
+        c.exec("delete from build_files where build_id in ($builds)", id)
+        c.exec("delete from builds where project_id = ?", id)
         c.exec("delete from release_requirements where requirement_id in ($reqs) or release_id in ($releases)", id, id)
         c.exec("delete from release_assets where release_id in ($releases)", id)
         c.exec("delete from releases where project_id = ?", id)
@@ -70,7 +71,7 @@ object ProjectRepo {
         Audit.add(c, actor, "project", id, "deleted", project.name)
         stored.filter { name ->
             c.count(
-                "select (select count(*) from attachments where stored_name = ?) + (select count(*) from req_version_files where stored_name = ?) + (select count(*) from release_assets where stored_name = ?)",
+                "select (select count(*) from attachments where stored_name = ?) + (select count(*) from build_files where stored_name = ?) + (select count(*) from release_assets where stored_name = ?)",
                 name, name, name
             ) == 0L
         }

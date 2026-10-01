@@ -2040,12 +2040,13 @@ a[data-href]:not([class]):hover {
   font-size: .8125rem;
 }
 
-.dl-when {
-  font-weight: 500;
+.dl-num {
+  font-weight: 600;
   white-space: nowrap;
-  color: var(--vs-fg);
+  color: var(--vs-fg-strong);
   font-variant-numeric: tabular-nums;
 }
+
 
 .dl-latest {
   padding: 0 8px;
@@ -2158,6 +2159,13 @@ a[data-href]:not([class]):hover {
   cursor: default;
 }
 
+.dl-file.is-off,
+.dl-file.is-off:hover {
+  color: var(--vs-fg-muted);
+  background: none;
+  cursor: default;
+}
+
 .dl-file.is-gone .dl-file-name {
   font-weight: 400;
   text-decoration: line-through;
@@ -2169,10 +2177,28 @@ a[data-href]:not([class]):hover {
   color: var(--vs-fg-faint);
 }
 
-.dl-card.is-closed .dl-latest {
+.build-also {
+  max-height: 11rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .5rem .75rem;
+  background: var(--vs-editor);
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+}
+
+.build-also .form-check {
+  margin-bottom: 0;
+}
+
+.build-also .form-check + .form-check {
+  margin-top: .4rem;
+}
+
+.build-also-state {
+  margin-left: .5rem;
+  font-size: .75rem;
   color: var(--vs-fg-muted);
-  background: transparent;
-  border-color: var(--vs-border-strong);
 }
 
 .dl-older > summary {

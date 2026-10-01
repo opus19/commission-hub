@@ -20,15 +20,15 @@ object Access {
         return view
     }
 
-    fun version(user: User, versionId: Long): Pair<ReqVersion, RequirementView> {
-        val version = VersionRepo.byId(versionId) ?: throw NotFoundResponse("版本不存在")
-        return version to requirement(user, version.requirementId)
+    fun build(user: User, buildId: Long): Build {
+        val build = BuildRepo.byId(buildId) ?: throw NotFoundResponse("构建不存在")
+        if (!canSee(user, build.projectId)) throw NotFoundResponse("构建不存在")
+        return build
     }
 
-    fun versionFile(user: User, fileId: Long): Pair<VersionFile, RequirementView> {
-        val file = VersionRepo.fileById(fileId) ?: throw NotFoundResponse("文件不存在")
-        val (_, view) = version(user, file.versionId)
-        return file to view
+    fun buildFile(user: User, fileId: Long): Pair<BuildFile, Build> {
+        val file = BuildRepo.fileById(fileId) ?: throw NotFoundResponse("文件不存在")
+        return file to build(user, file.buildId)
     }
 
     fun comment(user: User, commentId: Long): Pair<Comment, RequirementView> {

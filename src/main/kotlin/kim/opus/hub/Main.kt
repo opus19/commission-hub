@@ -15,9 +15,9 @@ fun main() {
     Db.init(config.dbPath)
     Schema.migrate()
     Uploads.configure(config.uploadDir, config.maxUploadBytes)
-    val swept = VersionRepo.purgeArchived()
+    val swept = BuildRepo.sweep()
     swept.stored.forEach { Uploads.deleteQuietly(it) }
-    if (swept.files > 0) println("已清理已归档需求的下载文件 ${swept.files} 个，释放 ${formatSize(swept.freed)}")
+    if (swept.files > 0) println("已清理用不到的构建文件 ${swept.files} 个，释放 ${formatSize(swept.freed)}")
     Sessions.configure(config.sessionMinutes, config.secureCookie)
     Bootstrap.ensureAdmin(config)
 

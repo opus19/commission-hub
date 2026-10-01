@@ -267,7 +267,9 @@ object RequirementHandlers {
         val view = Access.requirement(user, ctx.idParam())
         val r = view.requirement
         val comments = CommentRepo.forRequirement(r.id)
-        val versions = VersionRepo.forRequirement(r.id)
+        val builds = BuildRepo.forRequirement(r.id)
+        val top = if (builds.isEmpty() || view.readOnly) null else BuildRepo.newestLive(r.projectId)
+        val siblings = if (user.isAdmin && !view.readOnly) ReqRepo.openSiblings(r.projectId, r.id) else emptyList()
         val items = ItemRepo.forRequirement(r.id)
         val itemFiles = AttachmentRepo.forItems(r.id).filter { it.itemId != null }.groupBy { it.itemId!! }
         val targets = Transitions.allowed(user, view)
@@ -295,11 +297,12 @@ object RequirementHandlers {
             add("创建" to e(formatStamp(r.createdAt)))
             add("最后更新" to e(formatStamp(r.updatedAt)))
             if (r.statusEnum == ReqStatus.ARCHIVED && r.closedAt != null) add("归档时间" to e(formatStamp(r.closedAt)))
+            if (r.statusEnum == ReqStatus.ARCHIVED && r.acceptedBuild != null) add("验收构建" to "#${r.acceptedBuild}")
         }
 
         val side = buildString {
             if (user.isAdmin) append(adminStatusCard(ctx, view))
-            append(VersionHandlers.card(ctx, user, view, versions))
+            append(BuildHandlers.card(ctx, user, view, builds, top, siblings))
             append(sideCard("需求信息", infoList(info), flush = true))
         }
 

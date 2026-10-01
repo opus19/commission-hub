@@ -320,6 +320,58 @@ object Schema {
         """,
         19 to """
         alter table req_version_files add column purged_at text
+        """,
+        20 to """
+        create table builds (
+            id integer primary key autoincrement,
+            project_id integer not null references projects(id) on delete cascade,
+            seq integer not null,
+            created_by integer not null references users(id),
+            created_at text not null
+        );
+        create unique index ux_builds_seq on builds(project_id, seq);
+
+        create table build_files (
+            id integer primary key autoincrement,
+            build_id integer not null references builds(id) on delete cascade,
+            original_name text not null,
+            stored_name text not null,
+            size_bytes integer not null,
+            content_type text,
+            created_at text not null,
+            purged_at text
+        );
+        create index ix_build_files_build on build_files(build_id);
+        create index ix_build_files_stored on build_files(stored_name);
+
+        create table build_requirements (
+            build_id integer not null references builds(id) on delete cascade,
+            requirement_id integer not null references requirements(id) on delete cascade,
+            primary key (build_id, requirement_id)
+        );
+        create index ix_build_req_req on build_requirements(requirement_id);
+
+        insert into builds(id, project_id, seq, created_by, created_at)
+            select v.id, r.project_id,
+                   row_number() over (partition by r.project_id order by v.created_at, v.id),
+                   v.created_by, v.created_at
+            from req_versions v join requirements r on r.id = v.requirement_id;
+
+        insert into build_requirements(build_id, requirement_id)
+            select id, requirement_id from req_versions;
+
+        insert into build_files(id, build_id, original_name, stored_name, size_bytes, content_type, created_at, purged_at)
+            select id, version_id, original_name, stored_name, size_bytes, content_type, created_at, purged_at
+            from req_version_files
+            order by id;
+
+        drop table req_version_files;
+        drop table req_versions;
+
+        alter table projects add column build_seq integer not null default 0;
+        update projects set build_seq = coalesce((select max(b.seq) from builds b where b.project_id = projects.id), 0);
+
+        alter table requirements add column accepted_build integer
         """
     )
 

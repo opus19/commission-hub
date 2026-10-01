@@ -124,23 +124,34 @@ object ReqRepo {
         if (count > 0) Audit.add(c, actor, "requirement", id, "attached", "$count 个附件")
     }
 
-    fun setStatus(id: Long, from: ReqStatus, to: ReqStatus, actor: Long, note: String?): VersionRepo.Purge = Db.tx { c ->
-        val closedAt = if (to == ReqStatus.ARCHIVED) nowIso() else null
+    fun openSiblings(projectId: Long, exceptId: Long): List<Requirement> = Db.read { c ->
+        c.rows(
+            "select * from requirements where project_id = ? and id != ? and status != 'archived' order by seq desc",
+            projectId, exceptId, map = ::mapRequirement
+        )
+    }
+
+    fun setStatus(id: Long, from: ReqStatus, to: ReqStatus, actor: Long, note: String?): BuildRepo.Purge = Db.tx { c ->
+        val archive = to == ReqStatus.ARCHIVED
+        val projectId = c.count("select project_id from requirements where id = ?", id)
+        val accepted = if (archive) BuildRepo.acceptedSeq(c, id, projectId) else null
+        val stamp = nowIso()
         c.exec(
-            "update requirements set status = ?, closed_at = ?, updated_at = ? where id = ?",
-            to.code, closedAt, nowIso(), id
+            "update requirements set status = ?, closed_at = ?, accepted_build = ?, updated_at = ? where id = ?",
+            to.code, if (archive) stamp else null, accepted, stamp, id
         )
         val detail = buildString {
             append(from.label)
             append(" → ")
             append(to.label)
-            if (!note.isNullOrBlank()) {
+            val why = note?.trim().orEmpty().ifEmpty { if (accepted != null) "验收构建 #$accepted" else "" }
+            if (why.isNotEmpty()) {
                 append("：")
-                append(note.trim())
+                append(why)
             }
         }
         Audit.add(c, actor, "requirement", id, "status", detail)
-        if (to == ReqStatus.ARCHIVED) VersionRepo.purge(c, id, actor) else VersionRepo.Purge.NONE
+        if (archive) BuildRepo.purgeStale(c, projectId, actor) else BuildRepo.Purge.NONE
     }
 
     fun touch(c: Connection, id: Long) {

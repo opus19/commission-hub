@@ -568,6 +568,8 @@
   function go(a, newTab) {
     var href = a.getAttribute("data-href");
     if (!href) return;
+    var ask = isDownload(href) ? a.getAttribute("data-confirm") : null;
+    if (ask && !window.confirm(ask)) return;
     if (newTab) window.open(href, "_blank", "noopener");
     else if (isDownload(href)) window.location.assign(href);
     else if (island && island.el.contains(a) && a.hasAttribute("data-island-cancel")) closeIsland(false);

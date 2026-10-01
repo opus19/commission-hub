@@ -36,7 +36,8 @@ data class Requirement(
     val createdAt: String,
     val updatedAt: String,
     val closedAt: String?,
-    val wantedAt: String?
+    val wantedAt: String?,
+    val acceptedBuild: Int?
 ) {
     val statusEnum: ReqStatus get() = ReqStatus.of(status)
     val priorityEnum: Priority get() = Priority.of(priority)
@@ -89,9 +90,9 @@ data class FileChanges(
     val stored: List<NewFile> get() = items.flatten()
 }
 
-data class VersionFile(
+data class BuildFile(
     val id: Long,
-    val versionId: Long,
+    val buildId: Long,
     val originalName: String,
     val storedName: String,
     val sizeBytes: Long,
@@ -100,12 +101,13 @@ data class VersionFile(
     val purgedAt: String?
 )
 
-data class ReqVersion(
+data class Build(
     val id: Long,
-    val requirementId: Long,
+    val projectId: Long,
     val seq: Int,
     val createdAt: String,
-    val files: List<VersionFile>
+    val files: List<BuildFile>,
+    val requirementIds: List<Long>
 )
 
 data class Attachment(

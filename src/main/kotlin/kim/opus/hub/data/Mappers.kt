@@ -29,7 +29,8 @@ internal fun mapRequirement(rs: ResultSet) = Requirement(
     createdAt = rs.getString("created_at"),
     updatedAt = rs.getString("updated_at"),
     closedAt = rs.getString("closed_at"),
-    wantedAt = rs.getString("wanted_at")
+    wantedAt = rs.getString("wanted_at"),
+    acceptedBuild = rs.intOrNull("accepted_build")
 )
 
 internal fun mapItem(rs: ResultSet) = ReqItem(
@@ -65,9 +66,9 @@ internal fun mapComment(rs: ResultSet) = Comment(
     attachments = emptyList()
 )
 
-internal fun mapVersionFile(rs: ResultSet) = VersionFile(
+internal fun mapBuildFile(rs: ResultSet) = BuildFile(
     id = rs.getLong("id"),
-    versionId = rs.getLong("version_id"),
+    buildId = rs.getLong("build_id"),
     originalName = rs.getString("original_name"),
     storedName = rs.getString("stored_name"),
     sizeBytes = rs.getLong("size_bytes"),
@@ -76,10 +77,11 @@ internal fun mapVersionFile(rs: ResultSet) = VersionFile(
     purgedAt = rs.getString("purged_at")
 )
 
-internal fun mapVersion(rs: ResultSet) = ReqVersion(
+internal fun mapBuild(rs: ResultSet) = Build(
     id = rs.getLong("id"),
-    requirementId = rs.getLong("requirement_id"),
+    projectId = rs.getLong("project_id"),
     seq = rs.getInt("seq"),
     createdAt = rs.getString("created_at"),
-    files = emptyList()
+    files = emptyList(),
+    requirementIds = emptyList()
 )
