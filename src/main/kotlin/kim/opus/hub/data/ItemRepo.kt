@@ -65,8 +65,12 @@ object ItemRepo {
             "update requirements set status = 'todo', closed_at = null, updated_at = ? where id = ? and status = 'testing'",
             stamp, requirementId
         ) > 0
-        if (reopened) Audit.add(c, actor, "requirement", requirementId, "status", "待测试 → 待开发：客户加入清单项")
-        else ReqRepo.touch(c, requirementId)
+        if (reopened) {
+            c.exec("update req_items set done_at = null where requirement_id = ? and tested_at is null", requirementId)
+            Audit.add(c, actor, "requirement", requirementId, "status", "待测试 → 待开发：客户加入清单项")
+        } else {
+            ReqRepo.touch(c, requirementId)
+        }
         c.exec("delete from item_folds where user_id = ? and requirement_id = ?", actor, requirementId)
         Added(id, reopened)
     }
