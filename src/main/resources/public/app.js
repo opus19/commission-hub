@@ -360,7 +360,9 @@
       });
     }
 
-    return step(href, opts.method || "GET", opts.body || null).then(function (r) {
+    return flushItems().then(function () {
+      return step(href, opts.method || "GET", opts.body || null);
+    }).then(function (r) {
       if (seq !== navSeq) return;
       if (!r.htmlOk) {
         window.location.assign(r.path);
@@ -1391,6 +1393,9 @@
     if (row) row.classList.toggle("is-checked", input.checked);
   }
 
+  var ITEM_SAVE_MS = 600;
+  var itemJobs = [];
+
   function saveItem(input) {
     if (input.dataset.saving === "1") {
       input.dataset.dirty = "1";
@@ -1416,20 +1421,52 @@
       if (input.dataset.dirty === "1" && input.checked !== want) saveItem(input);
     };
     warm = null;
-    fetch(input.getAttribute("data-item-toggle"), {
+    var job = fetch(input.getAttribute("data-item-toggle"), {
       method: "POST",
       body: data,
       credentials: "same-origin",
       cache: "no-store",
       keepalive: true
     }).then(function (res) { finish(res.status === 204); }, function () { finish(false); });
+    var settled = function () { itemJobs.splice(itemJobs.indexOf(job), 1); };
+    itemJobs.push(job);
+    job.then(settled, settled);
+  }
+
+  function queueItem(input) {
+    window.clearTimeout(input._hubSave);
+    input._hubSave = window.setTimeout(function () { sendItem(input); }, ITEM_SAVE_MS);
+  }
+
+  function sendItem(input) {
+    window.clearTimeout(input._hubSave);
+    input._hubSave = 0;
+    if (input.dataset.saving === "1" || input.checked !== (input.dataset.saved === "1")) saveItem(input);
+  }
+
+  function flushItems() {
+    document.querySelectorAll("[data-item-toggle]").forEach(function (input) {
+      if (input._hubSave) sendItem(input);
+    });
+    if (!itemJobs.length) return Promise.resolve();
+    return Promise.all(itemJobs.map(function (job) { return job.catch(function () { }); })).then(flushItems);
   }
 
   document.addEventListener("change", function (event) {
     var t = event.target;
     if (!(t instanceof HTMLInputElement) || !t.hasAttribute("data-item-toggle")) return;
     markItem(t);
-    saveItem(t);
+    queueItem(t);
+  });
+
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (event.detail > 2 && t instanceof Element && t.closest(".req-item.is-editable .req-item-text")) event.preventDefault();
+  });
+
+  window.addEventListener("pagehide", flushItems);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") flushItems();
   });
 
   var WARM_MS = 8000;

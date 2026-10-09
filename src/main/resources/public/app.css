@@ -1380,8 +1380,6 @@ a[data-href]:not([class]):hover {
 
 .req-item.is-editable .req-item-text {
   cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .req-item-label {
